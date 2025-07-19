@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-dotenv
+pymongo
+httpx
+pydantic
+pytz
+numpy
+python-dateutil

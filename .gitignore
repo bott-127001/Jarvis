@@ -1,0 +1,29 @@
+# Python cache and environment files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+.env
+.env.*
+
+# Node modules and build output in frontend
+frontend/node_modules/
+frontend/build/
+frontend/.env
+frontend/.env.*
+
+# Node modules and build output in backend (if any Node usage)
+backend/node_modules/
+backend/build/
+backend/.env
+backend/.env.*
+
+# VSCode and system files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/ 
