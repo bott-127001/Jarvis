@@ -30,6 +30,7 @@ export function OptionChainProvider({ user: externalUser, children }) {
   });
   const [error, setError] = useState(null);
   const intervalRef = useRef(null);
+  const lastOptionChainRef = useRef(null); // for change detection
 
   // Persist state
   useEffect(() => {
@@ -90,7 +91,7 @@ export function OptionChainProvider({ user: externalUser, children }) {
     localStorage.setItem(LS_KEY, JSON.stringify({ user, expiry, fetching, optionChain, analytics }));
   }, [user, expiry, fetching, optionChain, analytics]);
 
-  // Fetch option chain
+  // Fetch option chain, only fetch analytics if data changed
   const fetchOptionChain = useCallback(async () => {
     if (!user || !expiry) return;
     setError(null);
@@ -98,9 +99,13 @@ export function OptionChainProvider({ user: externalUser, children }) {
       const res = await fetch(`${API_BASE}/option-chain?user=${user}&expiry=${expiry}`);
       if (!res.ok) throw new Error('Failed to fetch option chain');
       const json = await res.json();
-      setOptionChain(json.strikes || []);
-      // After fetching, trigger analytics
-      fetchAnalytics();
+      const newStrikes = json.strikes || [];
+      const newStrikesString = JSON.stringify(newStrikes);
+      if (lastOptionChainRef.current !== newStrikesString) {
+        setOptionChain(newStrikes);
+        lastOptionChainRef.current = newStrikesString;
+        fetchAnalytics(); // Only fetch analytics if option chain changed
+      }
     } catch (e) {
       setError(e.message);
     }
