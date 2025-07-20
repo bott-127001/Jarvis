@@ -2,31 +2,31 @@
   display: flex;
   min-height: 100vh;
   height: 100vh;
-  background: #181a1b;
-  color: #fff;
+  background: #fff;
+  color: #111;
   font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
   overflow: hidden;
 }
 
 .sidebar {
   width: 240px;
-  background: #232526;
+  background: #f5f5f7;
   display: flex;
   flex-direction: column;
   padding: 0;
-  border-right: 1px solid #333;
+  border-right: 1px solid #ddd;
   min-height: 100vh;
 }
 
 .sidebar-title {
   font-size: 1.5rem;
   font-weight: bold;
-  color: #fff;
+  color: #111;
   padding: 32px 0 24px 0;
   text-align: center;
   letter-spacing: 1px;
-  border-bottom: 1px solid #333;
-  background: #181a1b;
+  border-bottom: 1px solid #ddd;
+  background: #fff;
 }
 
 .sidebar nav {
@@ -38,7 +38,7 @@
 .sidebar-btn {
   background: none;
   border: none;
-  color: #bbb;
+  color: #444;
   text-align: left;
   padding: 18px 32px;
   font-size: 1.1rem;
@@ -49,14 +49,14 @@
 
 .sidebar-btn:hover,
 .sidebar-btn.active {
-  background: #333;
-  color: #fff;
+  background: #e0e0e0;
+  color: #111;
 }
 
 .main-content {
   flex: 1;
   padding: 48px 32px;
-  background: #1e1f21;
+  background: #f7f7fa;
   min-height: 100vh;
   height: 100vh;
   display: flex;
@@ -66,7 +66,7 @@
 }
 
 .section-content {
-  background: #232526;
+  background: #f5f5f7;
   border-radius: 24px;
   margin: 0 auto;
   padding: 64px 48px;
@@ -74,8 +74,8 @@
   max-width: 1100px;
   min-height: 70vh;
   min-width: 350px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
-  color: #fff;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  color: #111;
   font-size: 1.4rem;
   display: flex;
   flex-direction: column;
@@ -113,8 +113,9 @@ div::-webkit-scrollbar {
   overflow-x: auto;
   max-height: 60vh;
   border-radius: 12px;
-  background: #232526;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  border: 1px solid #e0e0e0;
 }
 
 /* OptionChain align top and taller table */
@@ -137,8 +138,8 @@ div::-webkit-scrollbar {
   align-items: center;
 }
 .bias-warning {
-  background: #ffa726;
-  color: #232526;
+  background: #ffe082;
+  color: #222;
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 18px;
@@ -149,31 +150,33 @@ div::-webkit-scrollbar {
 .bias-table-wrapper {
   width: 100%;
   margin-bottom: 24px;
-  background: #232526;
+  background: #fff;
   border-radius: 16px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   padding: 24px;
   overflow-x: auto;
+  border: 1px solid #e0e0e0;
 }
 .bias-table-main {
   width: 100%;
   border-collapse: collapse;
-  color: #fff;
+  color: #111;
 }
 .bias-participant-table-wrapper {
   width: 100%;
   max-width: 500px;
   margin: 32px auto 0;
   border-radius: 12px;
-  background: #181a1b;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+  background: #f5f5f7;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   padding: 24px;
   overflow-x: auto;
+  border: 1px solid #e0e0e0;
 }
 .bias-table-participant {
   width: 100%;
   border-collapse: collapse;
-  color: #fff;
+  color: #111;
 }
 
 /* BiasIdentifier Table Cell Spacing */
@@ -195,8 +198,8 @@ div::-webkit-scrollbar {
   align-items: center;
 }
 .marketstyle-warning {
-  background: #ffa726;
-  color: #232526;
+  background: #ffe082;
+  color: #222;
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 18px;
@@ -207,10 +210,11 @@ div::-webkit-scrollbar {
 .marketstyle-card {
   width: 100%;
   margin-bottom: 24px;
-  background: #232526;
+  background: #fff;
   border-radius: 16px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   padding: 24px;
+  border: 1px solid #e0e0e0;
 }
 .marketstyle-header-row {
   display: flex;
@@ -221,36 +225,37 @@ div::-webkit-scrollbar {
 .marketstyle-style {
   font-size: 22px;
   font-weight: 700;
-  color: #43a047;
+  color: #222;
 }
 .marketstyle-regime {
   font-size: 18px;
-  color: #61dafb;
+  color: #333;
 }
 .marketstyle-vol-row {
   display: flex;
   gap: 32px;
   margin-bottom: 8px;
   font-size: 16px;
-  color: #bbb;
+  color: #444;
 }
 .marketstyle-vol-row b {
-  color: #fff;
+  color: #111;
 }
 .marketstyle-table-wrapper {
   width: 100%;
   max-width: 600px;
   margin: 0 auto;
   border-radius: 12px;
-  background: #181a1b;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+  background: #f5f5f7;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   padding: 24px;
   overflow-x: auto;
+  border: 1px solid #e0e0e0;
 }
 .marketstyle-table {
   width: 100%;
   border-collapse: collapse;
-  color: #fff;
+  color: #111;
 }
 .marketstyle-table th,
 .marketstyle-table td {
