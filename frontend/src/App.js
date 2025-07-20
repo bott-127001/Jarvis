@@ -115,7 +115,8 @@ function App() {
               <span className="hamburger-icon">&#9776;</span>
             </span>
           </div>
-          {authenticated && user && (
+          {/* Desktop only: user info and logout */}
+          {authenticated && user && !isMobile && (
             <div style={{ padding: '16px 0', textAlign: 'center', color: '#bbb', fontWeight: 500 }}>
               User: <span style={{ color: '#fff', fontWeight: 600 }}>{user.charAt(0).toUpperCase() + user.slice(1)}</span>
               <button
@@ -146,6 +147,18 @@ function App() {
             <span style={{ fontWeight: 700, fontSize: 20 }}>Menu</span>
             <span className="sidebar-mobile-close" onClick={() => setSidebarOpen(false)}>&times;</span>
           </div>
+          {/* Mobile only: user info and logout */}
+          {authenticated && user && isMobile && (
+            <div style={{ padding: '12px 0', textAlign: 'center', color: '#bbb', fontWeight: 500, borderBottom: '1px solid #333', marginBottom: 8 }}>
+              User: <span style={{ color: '#fff', fontWeight: 600 }}>{user.charAt(0).toUpperCase() + user.slice(1)}</span>
+              <button
+                onClick={() => { handleLogout(); setSidebarOpen(false); }}
+                style={{ marginLeft: 12, padding: '4px 12px', borderRadius: 8, border: 'none', background: '#e53935', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
+              >
+                Logout
+              </button>
+            </div>
+          )}
           <nav className="sidebar-mobile-nav">
             {visibleSections.map((section) => (
               <button

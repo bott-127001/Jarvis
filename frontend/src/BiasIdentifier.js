@@ -65,43 +65,75 @@ export default function BiasIdentifier() {
                 <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>{data.puts && data.puts[col.key] !== undefined ? data.puts[col.key] : '-'}</td>
               ))}
             </tr>
-            {/* Difference Row */}
-            {data.diff_calls && data.diff_puts && (
+            {/* Rolling 10-min Difference Row */}
+            {data.rolling_deltas && (
               <>
                 <tr style={{ background: '#232526' }}>
                   <td rowSpan={2} style={{ fontWeight: 700, color: '#fff', padding: 4, fontSize: 16, textAlign: 'center', background: '#232526', borderRight: '1px solid #444', borderBottom: '1px solid #333', verticalAlign: 'middle' }}>
-                    Difference vs 9:15 AM
+                    10-min Δ
                   </td>
                   <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Call</td>
-                  {columns.map(col => (
-                    <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>{data.diff_calls[col.key] !== undefined ? data.diff_calls[col.key].toFixed(2) : '-'}</td>
-                  ))}
+                  {columns.map(col =>
+                    ['volume', 'openInterest', 'iv'].includes(col.key) ? (
+                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
+                        {data.rolling_deltas && data.rolling_deltas[`call_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
+                          ? data.rolling_deltas[`call_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2)
+                          : '-'}
+                      </td>
+                    ) : (
+                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
+                    )
+                  )}
                 </tr>
                 <tr style={{ background: '#181a1b' }}>
                   <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Put</td>
-                  {columns.map(col => (
-                    <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>{data.diff_puts[col.key] !== undefined ? data.diff_puts[col.key].toFixed(2) : '-'}</td>
-                  ))}
+                  {columns.map(col =>
+                    ['volume', 'openInterest', 'iv'].includes(col.key) ? (
+                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
+                        {data.rolling_deltas && data.rolling_deltas[`put_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
+                          ? data.rolling_deltas[`put_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2)
+                          : '-'}
+                      </td>
+                    ) : (
+                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
+                    )
+                  )}
                 </tr>
               </>
             )}
-            {/* Percentage Change Row */}
-            {data.pct_calls && data.pct_puts && (
+            {/* Rolling 10-min % Change Row */}
+            {data.rolling_pct && (
               <>
                 <tr style={{ background: '#232526' }}>
                   <td rowSpan={2} style={{ fontWeight: 700, color: '#fff', padding: 4, fontSize: 16, textAlign: 'center', background: '#232526', borderRight: '1px solid #444', borderBottom: '1px solid #333', verticalAlign: 'middle' }}>
-                    % Change vs 9:15 AM
+                    10-min %
                   </td>
                   <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Call</td>
-                  {columns.map(col => (
-                    <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>{data.pct_calls[col.key] !== undefined ? data.pct_calls[col.key].toFixed(2) + '%' : '-'}</td>
-                  ))}
+                  {columns.map(col =>
+                    ['volume', 'openInterest', 'iv'].includes(col.key) ? (
+                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
+                        {data.rolling_pct && data.rolling_pct[`call_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
+                          ? data.rolling_pct[`call_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2) + '%'
+                          : '-'}
+                      </td>
+                    ) : (
+                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
+                    )
+                  )}
                 </tr>
                 <tr style={{ background: '#181a1b' }}>
                   <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Put</td>
-                  {columns.map(col => (
-                    <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>{data.pct_puts[col.key] !== undefined ? data.pct_puts[col.key].toFixed(2) + '%' : '-'}</td>
-                  ))}
+                  {columns.map(col =>
+                    ['volume', 'openInterest', 'iv'].includes(col.key) ? (
+                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
+                        {data.rolling_pct && data.rolling_pct[`put_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
+                          ? data.rolling_pct[`put_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2) + '%'
+                          : '-'}
+                      </td>
+                    ) : (
+                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
+                    )
+                  )}
                 </tr>
               </>
             )}

@@ -207,14 +207,7 @@ async def bias_identifier(user: str, expiry: str):
     agg_cols = [
         ("volume", "call_volume", "put_volume"),
         ("openInterest", "call_oi", "put_oi"),
-        ("bidQty", "call_bid_qty", "put_bid_qty"),
-        ("askQty", "call_ask_qty", "put_ask_qty"),
-        ("bidPrice", "call_bid_price", "put_bid_price"),
-        ("askPrice", "call_ask_price", "put_ask_price"),
         ("iv", "call_iv", "put_iv"),
-        ("theta", "call_theta", "put_theta"),
-        ("vega", "call_vega", "put_vega"),
-        ("gamma", "call_gamma", "put_gamma"),
     ]
     def agg(rows, call_or_put):
         result = {}
@@ -226,70 +219,47 @@ async def bias_identifier(user: str, expiry: str):
     call_totals = agg(call_rows, "call")
     put_totals = agg(put_rows, "put")
 
-    # --- Baseline OTM+ATM snapshot logic ---
-    # Use user's local time (assume IST if not provided)
-    ist = timezone('Asia/Kolkata')
-    now_ist = datetime.now(ist)
-    today_str = now_ist.strftime('%Y-%m-%d')
-    nine_fifteen = now_ist.replace(hour=9, minute=15, second=0, microsecond=0)
-    if now_ist < nine_fifteen:
-        # Before 9:15, do not set or use baseline
-        baseline = None
-        diff_calls = None
-        diff_puts = None
-        pct_calls = None
-        pct_puts = None
+    # --- Rolling 10-min window for OI, IV, Volume ---
+    from datetime import datetime, timedelta
+    rolling_col = db["option_chain_rolling"]
+    now = datetime.utcnow()
+    # Insert current snapshot
+    rolling_col.insert_one({
+        "user": user,
+        "expiry": expiry,
+        "timestamp": now,
+        "call_oi": call_totals["openInterest"],
+        "put_oi": put_totals["openInterest"],
+        "call_iv": call_totals["iv"],
+        "put_iv": put_totals["iv"],
+        "call_volume": call_totals["volume"],
+        "put_volume": put_totals["volume"]
+    })
+    # Find snapshot from ~10 minutes ago
+    ten_min_ago = now - timedelta(minutes=10)
+    old_doc = rolling_col.find_one(
+        {"user": user, "expiry": expiry, "timestamp": {"$lte": ten_min_ago}},
+        sort=[("timestamp", -1)]
+    )
+    if old_doc:
+        rolling_deltas = {
+            "call_oi": call_totals["openInterest"] - old_doc["call_oi"],
+            "put_oi": put_totals["openInterest"] - old_doc["put_oi"],
+            "call_iv": call_totals["iv"] - old_doc["call_iv"],
+            "put_iv": put_totals["iv"] - old_doc["put_iv"],
+            "call_volume": call_totals["volume"] - old_doc["call_volume"],
+            "put_volume": put_totals["volume"] - old_doc["put_volume"],
+        }
+        rolling_pct = {
+            k: (rolling_deltas[k] / old_doc[k]) * 100 if old_doc[k] else 0
+            for k in rolling_deltas
+        }
     else:
-        # Use a separate collection for baselines
-        baseline_col = db["otm_baseline_snapshots"]
-        diff_col = db["otm_difference_snapshots"]
-        pct_col = db["otm_percentage_change_snapshots"]
-        baseline_doc = baseline_col.find_one({"user": user, "expiry": expiry, "date": today_str})
-        if not baseline_doc:
-            # Store baseline for today, including spot price
-            baseline_doc = {
-                "user": user,
-                "expiry": expiry,
-                "date": today_str,
-                "calls": call_totals,
-                "puts": put_totals,
-                "spot": spot,  # Store 9:15 AM spot price
-                "created_at": now_ist
-            }
-            baseline_col.insert_one(baseline_doc)
-        baseline = baseline_doc
-        # Compute difference
-        diff_calls = {k: (call_totals[k] - baseline["calls"].get(k, 0)) for k in call_totals}
-        diff_puts = {k: (put_totals[k] - baseline["puts"].get(k, 0)) for k in put_totals}
-        # Store difference in DB
-        diff_col.update_one(
-            {"user": user, "expiry": expiry, "date": today_str},
-            {"$set": {
-                "user": user,
-                "expiry": expiry,
-                "date": today_str,
-                "diff_calls": diff_calls,
-                "diff_puts": diff_puts,
-                "created_at": now_ist
-            }},
-            upsert=True
-        )
-        # Compute percentage change (for OI, IV, etc. only)
-        pct_calls = {k: ((diff_calls[k] / baseline["calls"].get(k, 1)) * 100 if baseline["calls"].get(k, 0) else 0) for k in diff_calls}
-        pct_puts = {k: ((diff_puts[k] / baseline["puts"].get(k, 1)) * 100 if baseline["puts"].get(k, 0) else 0) for k in diff_puts}
-        # Store percentage change in DB
-        pct_col.update_one(
-            {"user": user, "expiry": expiry, "date": today_str},
-            {"$set": {
-                "user": user,
-                "expiry": expiry,
-                "date": today_str,
-                "pct_calls": pct_calls,
-                "pct_puts": pct_puts,
-                "created_at": now_ist
-            }},
-            upsert=True
-        )
+        rolling_deltas = None
+        rolling_pct = None
+    # Purge old data (>15 min)
+    rolling_col.delete_many({"user": user, "expiry": expiry, "timestamp": {"$lt": now - timedelta(minutes=15)}})
+
     # --- Rolling spot price logic for dynamic price_direction ---
     spot_rolling_col = db["spot_price_rolling"]
     rolling_doc = spot_rolling_col.find_one({"user": user, "expiry": expiry})
@@ -319,22 +289,21 @@ async def bias_identifier(user: str, expiry: str):
     else:
         price_direction = None
 
-    # --- Participant and Bias Classification (refined) ---
+    # --- Participant and Bias Classification (refined, using rolling window) ---
     call_position = None
     put_position = None
     bias = None
-    # Only classify if we have all three % metrics and price direction
+    # Only classify if we have all three rolling % metrics and price direction
     if (
-        pct_calls is not None and pct_puts is not None and price_direction is not None and
-        all(k in pct_calls for k in ("openInterest", "volume", "iv")) and
-        all(k in pct_puts for k in ("openInterest", "volume", "iv"))
+        rolling_pct is not None and price_direction is not None and
+        all(k in rolling_pct for k in ("call_oi", "call_volume", "call_iv", "put_oi", "put_volume", "put_iv"))
     ):
-        call_oi = pct_calls["openInterest"]
-        call_vol = pct_calls["volume"]
-        call_iv = pct_calls["iv"]
-        put_oi = pct_puts["openInterest"]
-        put_vol = pct_puts["volume"]
-        put_iv = pct_puts["iv"]
+        call_oi = rolling_pct["call_oi"]
+        call_vol = rolling_pct["call_volume"]
+        call_iv = rolling_pct["call_iv"]
+        put_oi = rolling_pct["put_oi"]
+        put_vol = rolling_pct["put_volume"]
+        put_iv = rolling_pct["put_iv"]
         # Calls classification
         if call_oi > 0 and call_iv > 0 and call_vol > 0 and price_direction == "up":
             call_position = "Long Buildup"
@@ -375,20 +344,26 @@ async def bias_identifier(user: str, expiry: str):
         else:
             bias = "Sideways"
 
-    return {
+    output = {
         "calls": call_totals,
         "puts": put_totals,
-        "diff_calls": diff_calls,
-        "diff_puts": diff_puts,
-        "pct_calls": pct_calls,
-        "pct_puts": pct_puts,
+        "rolling_deltas": rolling_deltas,
+        "rolling_pct": rolling_pct,
         "price_direction": price_direction,
         "spot": spot,
-        "baseline_spot": baseline.get("spot") if baseline else None,
         "call_participant": call_position,
         "put_participant": put_position,
         "bias": bias
-    } 
+    }
+    # Persist output for ML/audit
+    db["bias_identifier_snapshots"].insert_one({
+        **output,
+        "user": user,
+        "expiry": expiry,
+        "timestamp": datetime.utcnow(),
+        "trigger": "poll"
+    })
+    return output 
 
 @app.get("/market-style-identifier")
 async def market_style_identifier(user: str, expiry: str, mode: str = Query("adaptive", enum=["strict", "adaptive"])):
@@ -555,7 +530,7 @@ async def market_style_identifier(user: str, expiry: str, mode: str = Query("ada
             market_style = "Volatile / Choppy"
         else:
             market_style = "Volatile / Choppy"
-    return {
+    output = {
         "market_style": market_style,
         "price_direction": price_direction,
         "oi_diff": oi_diff,
@@ -567,11 +542,18 @@ async def market_style_identifier(user: str, expiry: str, mode: str = Query("ada
         "total_volume": total_volume,
         "total_oi": total_oi,
         "mode": mode
-    } 
+    }
+    db["market_style_snapshots"].insert_one({
+        **output,
+        "user": user,
+        "expiry": expiry,
+        "timestamp": datetime.utcnow(),
+        "trigger": "poll"
+    })
+    return output 
 
 @app.get("/reversal-probability-finder")
 async def reversal_probability_finder(user: str, expiry: str):
-    # --- Rolling window setup ---
     ist = timezone('Asia/Kolkata')
     now_ist = datetime.now(ist)
     today_str = now_ist.strftime('%Y-%m-%d')
@@ -644,6 +626,18 @@ async def reversal_probability_finder(user: str, expiry: str):
     volatility_phase = "expanding" if iv_range > 5 else "normal"
     # --- Structural context ---
     structural_context = "counter_trend" if (higher_tf_trend == "down" and bias_trend == 1) or (higher_tf_trend == "up" and bias_trend == -1) else "trend_continuation"
+
+    # --- Market Style & Trap Detector Integration ---
+    style_fn = app.routes[[r.path for r in app.routes].index("/market-style-identifier")].endpoint
+    trap_fn = app.routes[[r.path for r in app.routes].index("/trap-detector")].endpoint
+    style = await style_fn(user, expiry, "adaptive")
+    trap = await trap_fn(user, expiry)
+    market_style = style.get("market_style") if style else None
+    trap_call = trap.get("call") if trap else None
+    trap_put = trap.get("put") if trap else None
+    trap_detected = (trap_call and trap_call.get("trap_detected")) or (trap_put and trap_put.get("trap_detected"))
+    trap_comment = "Trap detected by Trap Detector. Increases reversal probability." if trap_detected else ""
+
     # --- Reversal probability calculation ---
     score = 0
     if bias_cluster_flipped: score += 0.25
@@ -652,6 +646,19 @@ async def reversal_probability_finder(user: str, expiry: str):
     if liquidity_ok: score += 0.1
     if structural_context == "counter_trend": score += 0.1
     if volatility_phase == "expanding": score += 0.1
+    if trap_detected: score += 0.15
+    # Market style sensitivity
+    style_comment = ""
+    if market_style:
+        if "Trending" in market_style:
+            score *= 0.8  # require stronger confirmation
+            style_comment = "Trending market: reversal probability down-weighted."
+        elif "Sideways" in market_style:
+            score *= 1.2  # more sensitive
+            style_comment = "Sideways market: reversal probability up-weighted."
+        elif "Volatile" in market_style:
+            score *= 1.1  # slightly more sensitive
+            style_comment = "Volatile market: reversal probability slightly up-weighted."
     reversal_probability = min(1.0, score)
     reversal_type = None
     if reversal_probability > 0.5:
@@ -659,8 +666,8 @@ async def reversal_probability_finder(user: str, expiry: str):
             reversal_type = "bullish"
         elif bias_history and bias_history[-1] == "Bearish":
             reversal_type = "bearish"
-    reasoning = f"Bias flips: {bias_flips}, IV/OI flip: {iv_oi_support_flip}, Price vs Bias: {price_vs_bias_conflict}, Liquidity: {liquidity_ok}, Volatility: {volatility_phase}, Context: {structural_context}"
-    return {
+    reasoning = f"Bias flips: {bias_flips}, IV/OI flip: {iv_oi_support_flip}, Price vs Bias: {price_vs_bias_conflict}, Liquidity: {liquidity_ok}, Volatility: {volatility_phase}, Context: {structural_context}. {trap_comment} {style_comment}"
+    output = {
         "reversal_probability": round(float(reversal_probability), 2),
         "reversal_type": reversal_type,
         "bias_cluster_flipped": bool(bias_cluster_flipped),
@@ -669,12 +676,24 @@ async def reversal_probability_finder(user: str, expiry: str):
         "liquidity_ok": bool(liquidity_ok),
         "structural_context": structural_context,
         "volatility_phase": volatility_phase,
+        "market_style": market_style,
+        "trap_detected": bool(trap_detected),
         "reasoning": reasoning
-    } 
+    }
+    db["reversal_probability_snapshots"].insert_one({
+        **output,
+        "user": user,
+        "expiry": expiry,
+        "timestamp": datetime.utcnow(),
+        "trigger": "poll"
+    })
+    return output 
 
 @app.get("/trap-detector")
 async def trap_detector(user: str, expiry: str):
-    # --- Rolling window setup ---
+    from fastapi import Request
+    from datetime import datetime
+    import calendar
     ist = timezone('Asia/Kolkata')
     now_ist = datetime.now(ist)
     window_points = 120  # 10 min at 5s intervals
@@ -738,66 +757,147 @@ async def trap_detector(user: str, expiry: str):
             return False
         # Look for IV rising and volume stalling in last 3 points
         return any(leg_iv[-i] > leg_iv[-i-1] for i in range(1, 4)) and all(leg_vol[-i] < leg_vol[-i-1] for i in range(1, 4))
+
+    # --- S/R Guard Integration ---
+    sr_fn = app.routes[[r.path for r in app.routes].index("/support-resistance-guard")].endpoint
+    sr_zones = await sr_fn(user, expiry)
+    sr_trap_signals = []
+    for z in sr_zones:
+        if z.get("trap_risk") and z.get("zone_state") == "Active":
+            sr_trap_signals.append(f"Trap risk at {z['zone_type']} {z['zone_level']}")
+        if z.get("zone_state") == "Active" and z.get("bias_suggestion") == "Trap":
+            sr_trap_signals.append(f"Trap bias at {z['zone_type']} {z['zone_level']}")
+        if z.get("zone_state") == "Active" and z.get("bias_suggestion") == "Bounce" and z.get("confidence") == "Medium":
+            sr_trap_signals.append(f"Wick rejection at {z['zone_type']} {z['zone_level']}")
+        if z.get("zone_state") == "Active" and z.get("bias_suggestion") == "Break" and z.get("confidence") == "High":
+            sr_trap_signals.append(f"Fakeout at {z['zone_type']} {z['zone_level']}")
+
+    # --- Trap Memory (Historical Context) ---
+    trap_memory_col = db["trap_memory"]
+    trap_level = round(spots[-1], -1)  # round to nearest 10 for grouping
+    trap_mem_doc = trap_memory_col.find_one({"user": user, "expiry": expiry, "level": trap_level})
+    trap_count = trap_mem_doc["count"] if trap_mem_doc else 0
+
+    # --- Expiry/Event Sensitivity ---
+    is_expiry = now_ist.weekday() == 3  # Thursday
+    is_friday = now_ist.weekday() == 4
+    is_event_day = is_expiry or is_friday
+    min_signals_required = 2 if is_event_day else 1
+    event_comment = "Expiry/Event day: IV spikes may be event-driven. Require more signals for trap confirmation." if is_event_day else ""
+
     # --- Call Trap Logic ---
     call_score = 0
     call_comment = []
+    trap_signals = 0
     if price_direction == "up" and ce_oi_delta > 0 and ce_iv_delta < -0.5 * abs(ce_iv_avg):
         call_score += 20
         call_comment.append("Price up, CE OI up, CE IV down vs avg")
+        trap_signals += 1
     if price_stalling:
         call_score += 20
         call_comment.append("Price stalling/flat")
+        trap_signals += 1
     if ce_vs_pe_div:
         call_score += 20
         call_comment.append("PE also building OI/IV (hedge/fade)")
+        trap_signals += 1
     if ce_iv_delta < -0.5 * abs(ce_iv_avg):
         call_score += 20
         call_comment.append("CE IV drop significant vs regime")
+        trap_signals += 1
     if reversal_confirm(ce_iv, ce_vol):
         call_score += 20
         call_comment.append("Reversal confirmation in last 3 points")
+        trap_signals += 1
+    # S/R signals
+    for s in sr_trap_signals:
+        call_score += 10
+        call_comment.append(f"S/R: {s}")
+        trap_signals += 1
+    # Trap memory
+    if trap_count > 0:
+        call_score += min(20, trap_count * 5)
+        call_comment.append(f"Trap memory: {trap_count} prior traps at this level")
+    # Event/expiry sensitivity
+    if event_comment:
+        call_comment.append(event_comment)
     call_conf = "High" if call_score >= 80 else "Medium" if call_score >= 60 else "Low"
-    call_trap = call_score >= 60
+    call_trap = trap_signals >= min_signals_required and call_score >= 60
+    # Update trap memory if trap detected
+    if call_trap:
+        trap_memory_col.update_one({"user": user, "expiry": expiry, "level": trap_level}, {"$inc": {"count": 1}}, upsert=True)
+
     # --- Put Trap Logic ---
     put_score = 0
     put_comment = []
+    trap_signals = 0
     if price_direction == "down" and pe_oi_delta > 0 and pe_iv_delta < -0.5 * abs(pe_iv_avg):
         put_score += 20
         put_comment.append("Price down, PE OI up, PE IV down vs avg")
+        trap_signals += 1
     if price_stalling:
         put_score += 20
         put_comment.append("Price stalling/flat")
+        trap_signals += 1
     if pe_vs_ce_div:
         put_score += 20
         put_comment.append("CE also building OI/IV (hedge/fade)")
+        trap_signals += 1
     if pe_iv_delta < -0.5 * abs(pe_iv_avg):
         put_score += 20
         put_comment.append("PE IV drop significant vs regime")
+        trap_signals += 1
     if reversal_confirm(pe_iv, pe_vol):
         put_score += 20
         put_comment.append("Reversal confirmation in last 3 points")
+        trap_signals += 1
+    # S/R signals
+    for s in sr_trap_signals:
+        put_score += 10
+        put_comment.append(f"S/R: {s}")
+        trap_signals += 1
+    # Trap memory
+    if trap_count > 0:
+        put_score += min(20, trap_count * 5)
+        put_comment.append(f"Trap memory: {trap_count} prior traps at this level")
+    # Event/expiry sensitivity
+    if event_comment:
+        put_comment.append(event_comment)
     put_conf = "High" if put_score >= 80 else "Medium" if put_score >= 60 else "Low"
-    put_trap = put_score >= 60
-    return {
+    put_trap = trap_signals >= min_signals_required and put_score >= 60
+    # Update trap memory if trap detected
+    if put_trap:
+        trap_memory_col.update_one({"user": user, "expiry": expiry, "level": trap_level}, {"$inc": {"count": 1}}, upsert=True)
+
+    output = {
         "call": {
             "trap_detected": bool(call_trap),
             "trap_type": "Call Trap" if call_trap else "None",
             "deception_score": int(call_score),
             "confidence_level": call_conf,
-            "comment": "; ".join(call_comment) or "No trap detected"
+            "comment": "; ".join(call_comment) or "No trap detected",
+            "trap_memory": trap_count
         },
         "put": {
             "trap_detected": bool(put_trap),
             "trap_type": "Put Trap" if put_trap else "None",
             "deception_score": int(put_score),
             "confidence_level": put_conf,
-            "comment": "; ".join(put_comment) or "No trap detected"
+            "comment": "; ".join(put_comment) or "No trap detected",
+            "trap_memory": trap_count
         }
-    } 
+    }
+    db["trap_detector_snapshots"].insert_one({
+        **output,
+        "user": user,
+        "expiry": expiry,
+        "timestamp": datetime.utcnow(),
+        "trigger": "poll"
+    })
+    return output 
 
 @app.get("/support-resistance-guard")
 async def support_resistance_guard(user: str, expiry: str):
-    # --- Rolling window setup ---
     ist = timezone('Asia/Kolkata')
     now_ist = datetime.now(ist)
     window_points = 120  # 10 min at 5s intervals
@@ -840,12 +940,30 @@ async def support_resistance_guard(user: str, expiry: str):
     # Only keep those within ±400 of spot
     round_levels = [lvl for lvl in round_levels if abs(lvl - spot) <= 400]
 
+    # --- Manual zones from config ---
+    manual_zones_col = db["manual_zones"]
+    manual_zones_doc = manual_zones_col.find_one({"user": user, "expiry": expiry})
+    manual_zones = manual_zones_doc["zones"] if manual_zones_doc and "zones" in manual_zones_doc else []
+    # manual_zones: list of {"zone_type": "Manual", "zone_level": float}
+
     # --- Build zones list ---
     zones = [
         {"zone_type": "VWAP", "zone_level": vwap},
         {"zone_type": "PDH", "zone_level": pdh},
         {"zone_type": "PDL", "zone_level": pdl},
     ] + [{"zone_type": "Round", "zone_level": lvl} for lvl in round_levels]
+    # Add manual zones
+    zones += [{"zone_type": z.get("zone_type", "Manual"), "zone_level": z["zone_level"]} for z in manual_zones if "zone_level" in z]
+
+    # --- Volatility regime (iv_range) ---
+    def get_agg(doc):
+        strikes = doc.get("strikes", [])
+        ce_iv = sum(r.get("call_iv", 0) or 0 for r in strikes if r.get("call_option_type_zone") in ("ATM", "OTM"))
+        pe_iv = sum(r.get("put_iv", 0) or 0 for r in strikes if r.get("put_option_type_zone") in ("ATM", "OTM"))
+        return ce_iv, pe_iv
+    iv_series = [(get_agg(doc)[0] + get_agg(doc)[1]) for doc in oc_docs]
+    iv_range = max(iv_series) - min(iv_series) if iv_series else 0
+    volatility_regime = "high" if iv_range > 5 else "normal"
 
     # --- For each zone, evaluate state and signals ---
     results = []
@@ -857,7 +975,6 @@ async def support_resistance_guard(user: str, expiry: str):
         for doc in reversed(oc_docs):
             ts = doc.get("timestamp")
             strikes = doc.get("strikes", [])
-            # Use spot from strikes if available
             s = strikes[0].get("underlying_spot_price") if strikes and strikes[0].get("underlying_spot_price") else None
             if not s: continue
             if abs(s - zlvl) <= max(20, 0.001 * zlvl):
@@ -865,7 +982,6 @@ async def support_resistance_guard(user: str, expiry: str):
                 break
         # Zone state
         if last_test_time:
-            # Ensure both are timezone-aware or naive
             if isinstance(last_test_time, str):
                 try:
                     last_test_time_dt = parser.parse(last_test_time)
@@ -874,7 +990,6 @@ async def support_resistance_guard(user: str, expiry: str):
             else:
                 last_test_time_dt = last_test_time
             if last_test_time_dt is not None:
-                # Make both aware in IST
                 if last_test_time_dt.tzinfo is None:
                     last_test_time_dt = timezone('Asia/Kolkata').localize(last_test_time_dt)
                 if now_ist.tzinfo is None:
@@ -892,34 +1007,45 @@ async def support_resistance_guard(user: str, expiry: str):
                 zone_state = "Ignored"
         else:
             zone_state = "Ignored"
-        # --- Price action & wick structure (placeholder logic) ---
-        # Assume we have 5-min candle data (not implemented), so use spot movement as proxy
-        wick_reject = abs(spot - zlvl) > 10 and abs(spots[-1] - zlvl) < 20  # crude proxy
+        # Price action & wick structure (placeholder logic)
+        wick_reject = abs(spot - zlvl) > 10 and abs(spots[-1] - zlvl) < 20
         body_break = abs(spot - zlvl) < 10
-        # --- OI/IV/Volume analysis (use last doc) ---
+        # OI/IV/Volume analysis (use last doc)
         strikes = oc_docs[-1].get("strikes", [])
         ce_oi = sum(r.get("call_oi", 0) or 0 for r in strikes if r.get("call_option_type_zone") in ("ATM", "OTM"))
         pe_oi = sum(r.get("put_oi", 0) or 0 for r in strikes if r.get("put_option_type_zone") in ("ATM", "OTM"))
         ce_iv = sum(r.get("call_iv", 0) or 0 for r in strikes if r.get("call_option_type_zone") in ("ATM", "OTM"))
         pe_iv = sum(r.get("put_iv", 0) or 0 for r in strikes if r.get("put_option_type_zone") in ("ATM", "OTM"))
-        # --- Bias suggestion ---
+        # Bias suggestion and confidence logic
         bias_suggestion = "Bounce"
         confidence = "Low"
+        confidence_score = 0.3
         trap_risk = False
         if zone_state == "Active":
             if wick_reject:
                 bias_suggestion = "Bounce"
                 confidence = "Medium"
+                confidence_score = 0.6
             elif body_break:
                 bias_suggestion = "Break"
                 confidence = "High"
+                confidence_score = 0.9
             # Trap risk: CE unwinding + IV spike near resistance (or PE for support)
-            if (ztype in ["VWAP", "PDH", "Round"] and ce_oi < 0 and ce_iv > 0.05 * ce_iv) or (ztype in ["VWAP", "PDL", "Round"] and pe_oi < 0 and pe_iv > 0.05 * pe_iv):
+            if (ztype in ["VWAP", "PDH", "Round", "Manual"] and ce_oi < 0 and ce_iv > 0.05 * ce_iv) or (ztype in ["VWAP", "PDL", "Round", "Manual"] and pe_oi < 0 and pe_iv > 0.05 * pe_iv):
                 bias_suggestion = "Trap"
                 trap_risk = True
                 confidence = "Medium"
+                confidence_score = 0.8
         elif zone_state == "Decaying":
             confidence = "Low"
+            confidence_score = 0.3
+        # Volatility regime adjustment
+        if volatility_regime == "high":
+            if bias_suggestion == "Trap":
+                confidence_score = min(1.0, confidence_score + 0.1)
+            elif bias_suggestion in ["Break", "Bounce"]:
+                confidence_score = max(0.1, confidence_score - 0.2)
+                confidence = "Low" if confidence_score < 0.5 else confidence
         # Signal disagreement
         signal_disagreement = (global_bias and ((bias_suggestion == "Bounce" and global_bias == "Bearish") or (bias_suggestion == "Break" and global_bias == "Bullish") or (bias_suggestion == "Trap")))
         results.append({
@@ -928,11 +1054,21 @@ async def support_resistance_guard(user: str, expiry: str):
             "zone_state": zone_state,
             "bias_suggestion": bias_suggestion,
             "confidence": confidence,
+            "confidence_score": round(confidence_score, 2),
+            "volatility_regime": volatility_regime,
             "trap_risk": bool(trap_risk),
             "last_test_time": str(last_test_time) if last_test_time else None,
             "signal_disagreement": bool(signal_disagreement)
         })
-    return results 
+    output = results
+    db["support_resistance_snapshots"].insert_one({
+        "zones": results,
+        "user": user,
+        "expiry": expiry,
+        "timestamp": datetime.utcnow(),
+        "trigger": "poll"
+    })
+    return output 
 
 # Internal logging collection for transparency
 entry_engine_log_col = db["entry_logic_engine_logs"]
@@ -983,6 +1119,8 @@ async def entry_logic_engine(user: str, expiry: str, mode: str = Query("adaptive
     entry_zone = None
     confidence = "low"
     reason = ""
+    trade_type = None
+    entry_score = 0.0
     # --- Directional agreement (bias + reversal) ---
     bias_dir = bias["bias"] if bias and "bias" in bias else None
     reversal_type = reversal["reversal_type"] if reversal and "reversal_type" in reversal else None
@@ -1044,18 +1182,69 @@ async def entry_logic_engine(user: str, expiry: str, mode: str = Query("adaptive
     for z in sr_zones:
         if z.get("signal_disagreement") or z.get("trap_risk"):
             log_entry["conflicts"].append({"type": "zone_conflict", "zone": z})
-    # 8. Compose reason
+    # --- trade_type logic ---
+    if entry_direction == "long" and market_style and "Trending" in market_style:
+        trade_type = "trend_follow"
+    elif entry_direction == "short" and market_style and "Trending" in market_style:
+        trade_type = "trend_follow"
+    elif entry_direction in ["long", "short"] and market_style and "Range" in market_style:
+        trade_type = "fade"
+    elif entry_direction in ["long", "short"] and market_style and "Volatile" in market_style:
+        trade_type = "breakout"
+    # --- score weighting ---
+    # reversal=40%, trap=30%, bias=20%, sr=10%
+    reversal_score = reversal["reversal_probability"] if reversal and "reversal_probability" in reversal else 0
+    trap_score = max(trap_call.get("deception_score", 0), trap_put.get("deception_score", 0)) / 100 if trap_call or trap_put else 0
+    bias_score = 1.0 if (bias_dir == "Bullish" and entry_direction == "long") or (bias_dir == "Bearish" and entry_direction == "short") else 0.5 if bias_dir else 0
+    sr_score = 0
+    if entry_zone and "confidence" in entry_zone:
+        sr_score = 1.0 if entry_zone["confidence"] == "High" else 0.7 if entry_zone["confidence"] == "Medium" else 0.4
+    entry_score = 0.4 * reversal_score + 0.3 * (1 - trap_score) + 0.2 * bias_score + 0.1 * sr_score
+    # --- time-decay logic ---
+    # If any module's most recent signal is older than 5 min, reduce confidence and entry_score
+    latest_times = []
+    for mod in [bias, style, reversal, trap, sr]:
+        if mod and isinstance(mod, dict) and "timestamp" in mod:
+            try:
+                t = parser.parse(mod["timestamp"]) if isinstance(mod["timestamp"], str) else mod["timestamp"]
+                latest_times.append(t)
+            except Exception:
+                continue
+    if latest_times:
+        most_recent = max(latest_times)
+        if (now - most_recent).total_seconds() > 300:
+            # Reduce confidence by one level and entry_score by 0.2
+            if confidence == "high":
+                confidence = "medium"
+            elif confidence == "medium":
+                confidence = "low"
+            entry_score = max(0, entry_score - 0.2)
+            reasons.append("Signal is older than 5 minutes, confidence and score reduced.")
+    # --- set confidence from entry_score ---
+    if entry_score >= 0.8:
+        confidence = "high"
+    elif entry_score >= 0.6:
+        confidence = "medium"
+    else:
+        confidence = "low"
     reason = " ".join(reasons)
-    # 9. Log to DB
-    log_entry["final_decision"] = {"entry_direction": entry_direction, "entry_zone": entry_zone, "confidence": confidence, "reason": reason, "must_avoid": must_avoid}
+    log_entry["final_decision"] = {"entry_direction": entry_direction, "entry_zone": entry_zone, "confidence": confidence, "reason": reason, "must_avoid": must_avoid, "trade_type": trade_type, "entry_score": round(entry_score, 2)}
     entry_engine_log_col.insert_one(log_entry)
-    # 10. Return JSON
+    db["entry_logic_snapshots"].insert_one({
+        **log_entry["final_decision"],
+        "user": user,
+        "expiry": expiry,
+        "timestamp": datetime.utcnow(),
+        "trigger": "entry_decision"
+    })
     return {
         "entry_direction": entry_direction,
         "entry_zone": entry_zone,
         "confidence": confidence,
         "reason": reason,
         "must_avoid": must_avoid,
+        "trade_type": trade_type,
+        "entry_score": round(entry_score, 2),
         "raw_signals": log_entry["raw_signals"],
         "rejections": log_entry["rejections"],
         "conflicts": log_entry["conflicts"]

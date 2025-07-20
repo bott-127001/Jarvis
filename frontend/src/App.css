@@ -739,6 +739,89 @@ div::-webkit-scrollbar {
   }
 }
 
+/* --- OptionChain Table Improvements --- */
+.optionchain-table-wrapper table th,
+.optionchain-table-wrapper table td {
+  border: 1px solid #444 !important;
+  background-clip: padding-box;
+}
+.optionchain-table-wrapper table tr:nth-child(even) td {
+  background: #232526;
+}
+.optionchain-table-wrapper table tr:nth-child(odd) td {
+  background: #181a1b;
+}
+.optionchain-table-wrapper table th {
+  background: #181a1b;
+  color: #61dafb;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.optionchain-table-wrapper {
+  overflow-x: auto;
+  border: 1.5px solid #333;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  background: #181a1b;
+}
+
+@media (max-width: 700px) {
+  .optionchain-table-wrapper table th,
+  .optionchain-table-wrapper table td {
+    font-size: 12px !important;
+    padding: 7px 4px !important;
+    min-width: 80px;
+  }
+  .optionchain-table-wrapper {
+    border-radius: 8px;
+    border: 1.5px solid #333;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+    background: #181a1b;
+    margin-bottom: 12px;
+  }
+  .optionchain-filter-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
+  }
+  .optionchain-filter-top, .optionchain-filter-bottom {
+    flex-direction: row !important;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .optionchain-filter-top button,
+  .optionchain-filter-bottom button {
+    min-width: 100px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .optionchain-table-wrapper table th,
+  .optionchain-table-wrapper table td {
+    font-size: 11px !important;
+    padding: 6px 2px !important;
+    min-width: 70px;
+  }
+  .optionchain-table-wrapper {
+    border-radius: 6px;
+    border: 1.5px solid #333;
+    margin-bottom: 8px;
+  }
+  .optionchain-filter-row {
+    gap: 6px;
+  }
+  .optionchain-filter-top, .optionchain-filter-bottom {
+    gap: 6px;
+  }
+}
+
 @media (max-width: 700px) {
   .dashboard-root {
     flex-direction: column;
@@ -1096,11 +1179,14 @@ div::-webkit-scrollbar {
     border-radius: 6px;
   }
   .bias-table-main th,
-  .bias-table-main td,
-  .bias-table-participant th,
-  .bias-table-participant td {
-    padding: 3px 2px !important;
+  .bias-table-main td {
     font-size: 11px !important;
+    padding: 6px 2px !important;
+    min-width: 70px;
+  }
+  .bias-table-main th,
+  .bias-table-main td {
+    text-align: left !important;
   }
   .marketstyle-warning {
     font-size: 0.98rem;
@@ -1243,5 +1329,79 @@ div::-webkit-scrollbar {
   .sr-table td {
     font-size: 9px;
     padding: 2px;
+  }
+}
+
+/* --- BiasIdentifier Table Improvements --- */
+.bias-table-main th,
+.bias-table-main td {
+  border: 1px solid #444 !important;
+  background-clip: padding-box;
+}
+.bias-table-main tr:nth-child(even) td {
+  background: #232526;
+}
+.bias-table-main tr:nth-child(odd) td {
+  background: #181a1b;
+}
+.bias-table-main th {
+  background: #181a1b;
+  color: #61dafb;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+@media (max-width: 700px) {
+  .bias-table-main th,
+  .bias-table-main td {
+    font-size: 12px !important;
+    padding: 7px 4px !important;
+    min-width: 80px;
+  }
+}
+@media (max-width: 480px) {
+  .bias-table-main th,
+  .bias-table-main td {
+    font-size: 11px !important;
+    padding: 6px 2px !important;
+    min-width: 70px;
+  }
+}
+
+/* --- MarketStyleIdentifier Table Improvements --- */
+.marketstyle-table th,
+.marketstyle-table td {
+  border: 1px solid #444 !important;
+  background-clip: padding-box;
+}
+.marketstyle-table tr:nth-child(even) td {
+  background: #232526;
+}
+.marketstyle-table tr:nth-child(odd) td {
+  background: #181a1b;
+}
+.marketstyle-table th {
+  background: #181a1b;
+  color: #61dafb;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+@media (max-width: 700px) {
+  .marketstyle-table th,
+  .marketstyle-table td {
+    font-size: 12px !important;
+    padding: 7px 4px !important;
+    min-width: 80px;
+  }
+}
+@media (max-width: 480px) {
+  .marketstyle-table th,
+  .marketstyle-table td {
+    font-size: 11px !important;
+    padding: 6px 2px !important;
+    min-width: 70px;
   }
 }
