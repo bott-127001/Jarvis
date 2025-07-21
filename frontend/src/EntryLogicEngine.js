@@ -149,8 +149,9 @@ export default function EntryLogicEngine() {
         <div style={{ color: '#fff', fontWeight: 700 }}>Reason: <span style={{ fontWeight: 400 }}>{data.reason || '-'}</span></div>
       </div>
       {/* Module Table Card */}
-      <div className="entry-table-card" style={{ margin: '32px auto', overflowX: 'auto', maxWidth: '900px', minWidth: '0', width: '100%' }}>
-        <table className="entry-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 0, maxWidth: '100%' }}>
+      <div style={{ maxWidth: '900px', width: '100%', margin: '32px auto', padding: '0 16px' }}>
+        <div className="entry-table-card" style={{ margin: 0, overflowX: 'auto', width: '100%' }}>
+          <table className="entry-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 0, maxWidth: '100%' }}>
           <thead>
             <tr>
               <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 16, color: '#fff', background: '#181a1b' }}>Module</th>
