@@ -1142,17 +1142,24 @@ async def support_resistance_guard(user: str, expiry: str):
         })
     output = results
     # ML inference
-    ml_features = [
-        output['zone_state'], output['bias_suggestion'], output['confidence'], output['confidence_score'],
-        output['volatility_regime'], output['trap_risk'], output['last_test_time'], output['signal_disagreement']
-    ]
+    if results:
+        last_zone = results[-1]
+        ml_features = [
+            last_zone['zone_state'], last_zone['bias_suggestion'], last_zone['confidence'], last_zone['confidence_score'],
+            last_zone['volatility_regime'], last_zone['trap_risk'], last_zone['last_test_time'], last_zone['signal_disagreement']
+        ]
+    else:
+        ml_features = [None, None, None, None, None, None, None, None]
     try:
         ml_result = predict_sr(ml_features)
-        output['ml_predicted_sr'] = ml_result['predicted']
-        output['ml_probabilities'] = ml_result['probabilities']
-        output['ml_confidence'] = ml_result['confidence']
+        # Optionally attach ML results to the last zone
+        if results:
+            results[-1]['ml_predicted_sr'] = ml_result['predicted']
+            results[-1]['ml_probabilities'] = ml_result['probabilities']
+            results[-1]['ml_confidence'] = ml_result['confidence']
     except Exception as e:
-        output['ml_error'] = str(e)
+        if results:
+            results[-1]['ml_error'] = str(e)
     db["support_resistance_snapshots"].insert_one({
         "zones": results,
         "user": user,
@@ -1160,7 +1167,7 @@ async def support_resistance_guard(user: str, expiry: str):
         "timestamp": datetime.utcnow(),
         "trigger": "poll"
     })
-    return output 
+    return results
 
 # Internal logging collection for transparency
 entry_engine_log_col = db["entry_logic_engine_logs"]
