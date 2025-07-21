@@ -157,6 +157,13 @@ async def get_option_chain(user: str, expiry: str, request: Request):
             strike[f"put_{k}"] = v
         for k, v in put_greeks.items():
             strike[f"put_{k}"] = v
+        # Ensure all expected fields are present, set to '-' if missing
+        expected_fields = ["bidQty", "askQty", "bidPrice", "askPrice", "theta", "vega", "gamma"]
+        for field in expected_fields:
+            if f"call_{field}" not in strike:
+                strike[f"call_{field}"] = "-"
+            if f"put_{field}" not in strike:
+                strike[f"put_{field}"] = "-"
         strikes.append(strike)
 
     # Store snapshot in DB (overwrite previous for user+expiry)
