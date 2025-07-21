@@ -262,11 +262,22 @@ async def bias_identifier(user: str, expiry: str):
         }
         is_baseline = False
     else:
+        # Baseline: set all to zeroes, and flag as baseline
         rolling_deltas = {
-            "call_oi": 0, "put_oi": 0, "call_iv": 0, "put_iv": 0, "call_volume": 0, "put_volume": 0
+            "call_oi": 0,
+            "put_oi": 0,
+            "call_iv": 0,
+            "put_iv": 0,
+            "call_volume": 0,
+            "put_volume": 0,
         }
         rolling_pct = {
-            "call_oi": 0, "put_oi": 0, "call_iv": 0, "put_iv": 0, "call_volume": 0, "put_volume": 0
+            "call_oi": 0,
+            "put_oi": 0,
+            "call_iv": 0,
+            "put_iv": 0,
+            "call_volume": 0,
+            "put_volume": 0,
         }
         is_baseline = True
     # Purge old data (>15 min)

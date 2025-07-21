@@ -35,11 +35,7 @@ export default function BiasIdentifier() {
   // Helper to check if all values in an object are zero or undefined
   const isAllZeroOrMissing = obj => obj && Object.values(obj).every(v => !v || Math.abs(v) < 1e-6);
 
-  const showRollingDeltas = data.rolling_deltas !== undefined;
-  const showRollingPct = data.rolling_pct !== undefined;
-  const deltasAreBaseline = isAllZeroOrMissing(data.rolling_deltas);
-  const pctAreBaseline = isAllZeroOrMissing(data.rolling_pct);
-  const isBaseline = data.is_baseline;
+  const isBaseline = !!data.is_baseline;
 
   return (
     <div className="bias-root">
@@ -77,15 +73,15 @@ export default function BiasIdentifier() {
             {/* Rolling 10-min Difference Row (always show) */}
             <tr style={{ background: '#232526' }}>
               <td rowSpan={2} style={{ fontWeight: 700, color: '#fff', padding: 4, fontSize: 16, textAlign: 'center', background: '#232526', borderRight: '1px solid #444', borderBottom: '1px solid #333', verticalAlign: 'middle' }}>
-                10-min Δ
+                10-min 94
               </td>
               <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Call</td>
               {columns.map(col =>
                 ['volume', 'openInterest', 'iv'].includes(col.key) ? (
                   <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
-                    {showRollingDeltas && data.rolling_deltas && data.rolling_deltas[`call_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
+                    {data.rolling_deltas && data.rolling_deltas[`call_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
                       ? data.rolling_deltas[`call_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2)
-                      : '-'}
+                      : '0.00'}
                   </td>
                 ) : (
                   <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
@@ -97,9 +93,9 @@ export default function BiasIdentifier() {
               {columns.map(col =>
                 ['volume', 'openInterest', 'iv'].includes(col.key) ? (
                   <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
-                    {showRollingDeltas && data.rolling_deltas && data.rolling_deltas[`put_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
+                    {data.rolling_deltas && data.rolling_deltas[`put_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
                       ? data.rolling_deltas[`put_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2)
-                      : '-'}
+                      : '0.00'}
                   </td>
                 ) : (
                   <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
@@ -115,9 +111,9 @@ export default function BiasIdentifier() {
               {columns.map(col =>
                 ['volume', 'openInterest', 'iv'].includes(col.key) ? (
                   <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
-                    {showRollingPct && data.rolling_pct && data.rolling_pct[`call_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
+                    {data.rolling_pct && data.rolling_pct[`call_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
                       ? data.rolling_pct[`call_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2) + '%'
-                      : '-'}
+                      : '0.00%'}
                   </td>
                 ) : (
                   <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
@@ -129,9 +125,9 @@ export default function BiasIdentifier() {
               {columns.map(col =>
                 ['volume', 'openInterest', 'iv'].includes(col.key) ? (
                   <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
-                    {showRollingPct && data.rolling_pct && data.rolling_pct[`put_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
+                    {data.rolling_pct && data.rolling_pct[`put_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
                       ? data.rolling_pct[`put_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2) + '%'
-                      : '-'}
+                      : '0.00%'}
                   </td>
                 ) : (
                   <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
@@ -140,38 +136,40 @@ export default function BiasIdentifier() {
             </tr>
           </tbody>
         </table>
-        {/* Rolling window info message */}
-        {(isBaseline || (deltasAreBaseline && pctAreBaseline && showRollingDeltas && showRollingPct)) && (
+        {/* Baseline info message */}
+        {isBaseline && (
           <div style={{ color: '#ffa726', fontWeight: 500, marginTop: 10 }}>
             Baseline (first fetch) — rolling window will update as more data accumulates.
           </div>
         )}
       </div>
-      {/* Always show Participant & Bias Table */}
-      <div className="bias-participant-table-wrapper">
-        <table className="bias-table-participant">
-          <thead>
-            <tr>
-              <th style={{ background: '#181a1b', color: '#61dafb', fontWeight: 700, fontSize: 14, padding: 6, textAlign: 'center', borderBottom: '1px solid #444' }}>Type</th>
-              <th style={{ background: '#181a1b', color: '#61dafb', fontWeight: 700, fontSize: 14, padding: 6, textAlign: 'center', borderBottom: '1px solid #444' }}>Participant</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style={{ fontWeight: 600, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Call</td>
-              <td style={{ fontWeight: 500, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.call_participant || '-'}</td>
-            </tr>
-            <tr>
-              <td style={{ fontWeight: 600, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Put</td>
-              <td style={{ fontWeight: 500, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.put_participant || '-'}</td>
-            </tr>
-            <tr>
-              <td style={{ fontWeight: 700, color: '#61dafb', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Bias</td>
-              <td style={{ fontWeight: 700, color: biasColor(data.bias), padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.bias || '-'}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      {/* Participant & Bias Table */}
+      {(data.call_participant || data.put_participant || data.bias) && (
+        <div className="bias-participant-table-wrapper">
+          <table className="bias-table-participant">
+            <thead>
+              <tr>
+                <th style={{ background: '#181a1b', color: '#61dafb', fontWeight: 700, fontSize: 14, padding: 6, textAlign: 'center', borderBottom: '1px solid #444' }}>Type</th>
+                <th style={{ background: '#181a1b', color: '#61dafb', fontWeight: 700, fontSize: 14, padding: 6, textAlign: 'center', borderBottom: '1px solid #444' }}>Participant</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ fontWeight: 600, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Call</td>
+                <td style={{ fontWeight: 500, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.call_participant || '-'}</td>
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 600, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Put</td>
+                <td style={{ fontWeight: 500, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.put_participant || '-'}</td>
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 700, color: '#61dafb', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Bias</td>
+                <td style={{ fontWeight: 700, color: biasColor(data.bias), padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.bias || '-'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 } 
