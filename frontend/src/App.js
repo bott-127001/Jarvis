@@ -48,7 +48,7 @@ function App() {
     const checkToken = async () => {
       setChecking(true);
       try {
-        const res = await fetch(`http://localhost:8000/check-token?user=${user}`);
+        const res = await fetch(`/check-token?user=${user}`);
         const data = await res.json();
         setAuthenticated(data.valid);
         if (!data.valid) setSelected('login');

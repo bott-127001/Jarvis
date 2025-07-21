@@ -20,6 +20,13 @@ const confColor = (conf) => {
   return '#bbb';
 };
 
+const biasColor = (bias) => {
+  if (bias === 'Bullish') return '#43a047';
+  if (bias === 'Bearish') return '#e53935';
+  if (bias === 'Sideways') return '#ffa726';
+  return '#bbb';
+};
+
 export default function EntryLogicEngine() {
   const { analytics, fetching, user, expiry } = useOptionChain();
   const data = analytics.entry;
@@ -41,38 +48,86 @@ export default function EntryLogicEngine() {
 
   // Module summary table (if available)
   const raw = data.raw_signals || {};
-const moduleTable = [
-  {
-    module: 'Bias Identifier',
-      key: raw.bias?.bias || '-',
+  const biasVal = raw.bias?.bias || '-';
+  const biasWarn = !['Bullish', 'Bearish', 'Sideways'].includes(biasVal);
+  const biasDeltas = raw.bias?.rolling_deltas;
+  const biasPct = raw.bias?.rolling_pct;
+  const biasConf = raw.bias?.ml_confidence !== undefined ? (raw.bias.ml_confidence * 100).toFixed(1) + '%' : '-';
+
+  const marketStyle = raw.style?.market_style || '-';
+  const marketConf = raw.style?.ml_confidence !== undefined ? (raw.style.ml_confidence * 100).toFixed(1) + '%' : '-';
+  const marketSummary = raw.style ? (
+    <div style={{ fontSize: 12, color: '#bbb' }}>
+      {['price_direction', 'oi_diff', 'vol_diff', 'iv_diff'].map(k => `${k}: ${raw.style[k]}`).join(', ')}
+    </div>
+  ) : '-';
+
+  const trapCall = raw.trap?.call;
+  const trapPut = raw.trap?.put;
+  const trapKey = `Call: ${trapCall?.trap_type || '-'} (${trapCall?.confidence_level || '-'}) | Put: ${trapPut?.trap_type || '-'} (${trapPut?.confidence_level || '-'})`;
+  const trapConf = `Call: ${trapCall?.confidence_level || '-'} | Put: ${trapPut?.confidence_level || '-'}`;
+  const trapSummary = (
+    <div style={{ fontSize: 12, color: '#bbb' }}>
+      Call deception: {trapCall?.deception_score ?? '-'}, Put deception: {trapPut?.deception_score ?? '-'}<br/>
+      Call memory: {trapCall?.trap_memory ?? '-'}, Put memory: {trapPut?.trap_memory ?? '-'}
+    </div>
+  );
+
+  const reversalType = raw.reversal?.reversal_type || '-';
+  const reversalConf = raw.reversal?.reversal_probability !== undefined ? (raw.reversal.reversal_probability * 100).toFixed(0) + '%' : '-';
+  const reversalSummary = raw.reversal ? (
+    <div style={{ fontSize: 12, color: '#bbb' }}>
+      Prob: {reversalConf}, Bias flips: {raw.reversal.bias_cluster_flipped ? 'Yes' : 'No'}, IV/OI flip: {raw.reversal.iv_oi_support_flip ? 'Yes' : 'No'}
+    </div>
+  ) : '-';
+
+  const srZones = Array.isArray(raw.sr) ? raw.sr : [];
+  const srKey = srZones.length > 0 ? `${srZones.length} zones` : '-';
+  const srSummary = srZones.length > 0 ? (
+    <div style={{ fontSize: 12, color: '#bbb' }}>
+      {srZones.filter(z => z.zone_state === 'Active').map(z => `${z.zone_type} @ ${z.zone_level} (${z.bias_suggestion}, ${z.confidence})`).join('; ') || 'No active zones'}
+    </div>
+  ) : '-';
+
+  const moduleTable = [
+    {
+      module: 'Bias Identifier',
+      key: (
+        <span style={{ color: biasColor(biasVal), fontWeight: 700 }}>{biasVal !== '-' ? biasVal : 'No bias'}{biasWarn && <span style={{ color: '#e53935', marginLeft: 8 }}>(No bias detected)</span>}</span>
+      ),
+      confidence: biasConf,
+      summary: (
+        <div>
+          <div>Δ: {biasDeltas ? Object.entries(biasDeltas).map(([k, v]) => `${k}: ${v.toFixed(2)}`).join(', ') : '-'}</div>
+          <div>%: {biasPct ? Object.entries(biasPct).map(([k, v]) => `${k}: ${v.toFixed(2)}%`).join(', ') : '-'}</div>
+        </div>
+      ),
+    },
+    {
+      module: 'Market Style',
+      key: marketStyle,
+      confidence: marketConf,
+      summary: marketSummary,
+    },
+    {
+      module: 'Trap Detector',
+      key: trapKey,
+      confidence: trapConf,
+      summary: trapSummary,
+    },
+    {
+      module: 'Reversal Probability',
+      key: reversalType,
+      confidence: reversalConf,
+      summary: reversalSummary,
+    },
+    {
+      module: 'Support/Resistance',
+      key: srKey,
       confidence: '-',
-      summary: raw.bias ? JSON.stringify(raw.bias) : '-',
-  },
-  {
-    module: 'Market Style',
-      key: raw.style?.market_style || '-',
-      confidence: '-',
-      summary: raw.style ? JSON.stringify(raw.style) : '-',
-  },
-  {
-    module: 'Trap Detector',
-      key: `Call: ${raw.trap?.call?.trap_type || '-'} (${raw.trap?.call?.confidence_level || '-'}) | Put: ${raw.trap?.put?.trap_type || '-'} (${raw.trap?.put?.confidence_level || '-'})`,
-      confidence: `Call: ${raw.trap?.call?.confidence_level || '-'} | Put: ${raw.trap?.put?.confidence_level || '-'}`,
-      summary: raw.trap ? JSON.stringify(raw.trap) : '-',
-  },
-  {
-    module: 'Reversal Probability',
-      key: raw.reversal?.reversal_type || '-',
-      confidence: raw.reversal ? `${(raw.reversal.reversal_probability * 100).toFixed(0)}%` : '-',
-      summary: raw.reversal ? JSON.stringify(raw.reversal) : '-',
-  },
-  {
-    module: 'Support/Resistance',
-      key: Array.isArray(raw.sr) && raw.sr.length > 0 ? `${raw.sr.length} zones` : '-',
-    confidence: '-',
-      summary: raw.sr ? JSON.stringify(raw.sr) : '-',
-  },
-];
+      summary: srSummary,
+    },
+  ];
 
   return (
     <div className="entry-root">
