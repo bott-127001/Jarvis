@@ -1524,18 +1524,17 @@ async def entry_logic_engine(user: str, expiry: str, mode: str = Query("adaptive
 @app.post("/clear-analytics")
 def clear_analytics(user: str, expiry: str):
     # Remove analytics/calculated data for this user/expiry
-    # Do NOT remove option chain data or tokens
-    # Remove analytics from relevant collections
-    db["otm_baseline_snapshots"].delete_many({"user": user, "expiry": expiry})
-    db["otm_difference_snapshots"].delete_many({"user": user, "expiry": expiry})
-    db["otm_percentage_change_snapshots"].delete_many({"user": user, "expiry": expiry})
+    # Do NOT remove option chain data, tokens, ML models, or training/statistical/anomaly data
+    db["option_chain_rolling"].delete_many({"user": user, "expiry": expiry})
+    db["spot_price_rolling"].delete_many({"user": user, "expiry": expiry})
+    db["bias_identifier_snapshots"].delete_many({"user": user, "expiry": expiry})
     db["market_style_snapshots"].delete_many({"user": user, "expiry": expiry})
-    db["reversal_probability_snapshots"].delete_many({"user": user, "expiry": expiry})
     db["trap_detector_snapshots"].delete_many({"user": user, "expiry": expiry})
+    db["reversal_probability_snapshots"].delete_many({"user": user, "expiry": expiry})
     db["support_resistance_snapshots"].delete_many({"user": user, "expiry": expiry})
-    db["entry_logic_snapshots"].delete_many({"user": user, "expiry": expiry})
-    # You can add more collections here if needed
-    return {"success": True, "message": "Analytics/calculated data cleared for user/expiry."} 
+    db["bias_state_history"].delete_many({"user": user, "expiry": expiry})
+    db["manual_zones"].delete_many({"user": user, "expiry": expiry})
+    return {"success": True, "message": "Analytics and rolling data cleared for user/expiry."}
 
 # Serve React build as static files
 frontend_build_path = os.path.join(os.path.dirname(__file__), '../../frontend/build')
