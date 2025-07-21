@@ -149,7 +149,7 @@ export default function EntryLogicEngine() {
         <div style={{ color: '#fff', fontWeight: 700 }}>Reason: <span style={{ fontWeight: 400 }}>{data.reason || '-'}</span></div>
       </div>
       {/* Module Table Card */}
-      <div style={{ maxWidth: '700px', width: '100%', margin: '32px auto', padding: '0 8px' }}>
+      <div style={{ maxWidth: '700px', width: '100%', margin: '32px auto', padding: '0 8px', boxSizing: 'border-box' }}>
         <div className="entry-table-card" style={{ margin: 0, overflowX: 'auto', width: '100%' }}>
           <table className="entry-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 0, maxWidth: '100%' }}>
             <thead>
@@ -167,7 +167,17 @@ export default function EntryLogicEngine() {
                   <td className="entry-table-key" style={{ padding: '10px 10px', verticalAlign: 'top', fontWeight: 600, color: '#fff', width: 160 }}>{row.key}</td>
                   <td className="entry-table-confidence" style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 600, color: '#fff', verticalAlign: 'top', width: 90 }}>{row.confidence}</td>
                   <td className="entry-table-summary" style={{ padding: '10px 10px', verticalAlign: 'top', fontSize: 13, color: '#fff', maxWidth: 220, minWidth: 120, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
-                    {typeof row.summary === 'string' ? row.summary : (
+                    {row.module === 'Trap Detector' ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, color: '#fff', fontSize: 13 }}>
+                        <div><b>Call deception:</b> {trapCall?.deception_score ?? '-'}</div>
+                        <div><b>Put deception:</b> {trapPut?.deception_score ?? '-'}</div>
+                        <div><b>Call memory:</b> {trapCall?.trap_memory ?? '-'}</div>
+                        <div><b>Put memory:</b> {trapPut?.trap_memory ?? '-'}</div>
+                        <div><b>Call conf:</b> {trapCall?.confidence_level ?? '-'}</div>
+                        <div><b>Put conf:</b> {trapPut?.confidence_level ?? '-'}</div>
+                        <div><b>Comment:</b> {trapCall?.comment ?? '-'}</div>
+                      </div>
+                    ) : typeof row.summary === 'string' ? row.summary : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, color: '#fff', fontSize: 13, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
                         {React.Children.toArray(
                           typeof row.summary === 'object' && row.summary.props && row.summary.props.children
@@ -185,6 +195,18 @@ export default function EntryLogicEngine() {
           </table>
         </div>
       </div>
+      <style>{`
+        @media (max-width: 800px) {
+          .entry-table-card { max-width: 99vw !important; }
+          .entry-table { font-size: 12px !important; }
+          .entry-table th, .entry-table td { padding: 6px 4px !important; }
+        }
+        @media (max-width: 500px) {
+          .entry-table-card { max-width: 99vw !important; }
+          .entry-table { font-size: 11px !important; }
+          .entry-table th, .entry-table td { padding: 4px 2px !important; }
+        }
+      `}</style>
     </div>
   );
 } 
