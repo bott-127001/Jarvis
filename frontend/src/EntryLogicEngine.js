@@ -149,31 +149,31 @@ export default function EntryLogicEngine() {
         </div>
       </div>
       {/* Module Table Card */}
-      <div className="entry-table-card" style={{ marginTop: 32, overflowX: 'auto' }}>
-        <table className="entry-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 700 }}>
+      <div className="entry-table-card" style={{ margin: '32px 0 32px 0', overflowX: 'auto' }}>
+        <table className="entry-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 700, color: '#fff' }}>
           <thead>
             <tr>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 16 }}>Module</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 16 }}>Key Output</th>
-              <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 16, width: 120 }}>Confidence/Score</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 16 }}>Summary</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 16, color: '#fff', background: '#181a1b' }}>Module</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 16, color: '#fff', background: '#181a1b' }}>Key Output</th>
+              <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 16, width: 120, color: '#fff', background: '#181a1b' }}>Confidence/Score</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 16, color: '#fff', background: '#181a1b' }}>Summary</th>
             </tr>
           </thead>
           <tbody>
             {moduleTable.map((row, i) => (
               <tr key={row.module} style={{ borderBottom: '1px solid #444', background: i % 2 === 0 ? '#232526' : '#181a1b' }}>
-                <td className="entry-table-module" style={{ padding: '10px 14px', fontWeight: 700, color: '#61dafb', verticalAlign: 'top' }}>{row.module}</td>
-                <td className="entry-table-key" style={{ padding: '10px 14px', verticalAlign: 'top', fontWeight: 600 }}>{row.key}</td>
-                <td className="entry-table-confidence" style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 600, color: '#ffa726', verticalAlign: 'top' }}>{row.confidence}</td>
-                <td className="entry-table-summary" style={{ padding: '10px 14px', verticalAlign: 'top', fontSize: 14 }}>
+                <td className="entry-table-module" style={{ padding: '10px 14px', fontWeight: 700, color: '#fff', verticalAlign: 'top' }}>{row.module}</td>
+                <td className="entry-table-key" style={{ padding: '10px 14px', verticalAlign: 'top', fontWeight: 600, color: '#fff' }}>{row.key}</td>
+                <td className="entry-table-confidence" style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 600, color: '#fff', verticalAlign: 'top' }}>{row.confidence}</td>
+                <td className="entry-table-summary" style={{ padding: '10px 14px', verticalAlign: 'top', fontSize: 14, color: '#fff' }}>
                   {typeof row.summary === 'string' ? row.summary : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, color: '#fff' }}>
                       {React.Children.toArray(
                         typeof row.summary === 'object' && row.summary.props && row.summary.props.children
                           ? (Array.isArray(row.summary.props.children) ? row.summary.props.children : [row.summary.props.children])
                           : []
                       ).map((item, idx) => (
-                        <div key={idx} style={{ color: '#bbb', fontSize: 14 }}>{item}</div>
+                        <div key={idx} style={{ color: '#fff', fontSize: 14 }}>{item}</div>
                       ))}
                     </div>
                   )}

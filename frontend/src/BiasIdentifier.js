@@ -154,36 +154,34 @@ export default function BiasIdentifier() {
           </div>
         )}
       </div>
-      {/* Participant & Bias Table */}
-      {(data.call_participant || data.put_participant || data.bias) && (
-        <div className="bias-participant-table-wrapper">
-          <table className="bias-table-participant">
-            <thead>
-              <tr>
-                <th style={{ background: '#181a1b', color: '#61dafb', fontWeight: 700, fontSize: 14, padding: 6, textAlign: 'center', borderBottom: '1px solid #444' }}>Type</th>
-                <th style={{ background: '#181a1b', color: '#61dafb', fontWeight: 700, fontSize: 14, padding: 6, textAlign: 'center', borderBottom: '1px solid #444' }}>Participant</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style={{ fontWeight: 600, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Call</td>
-                <td style={{ fontWeight: 500, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.call_participant || '-'}</td>
-              </tr>
-              <tr>
-                <td style={{ fontWeight: 600, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Put</td>
-                <td style={{ fontWeight: 500, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.put_participant || '-'}</td>
-              </tr>
-              <tr>
-                <td style={{ fontWeight: 700, color: '#61dafb', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Bias</td>
-                <td style={{ fontWeight: 700, color: biasColor(data.bias), padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.bias || '-'}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Classic Bias/Participant Table with spacing */}
+      <div style={{ margin: '32px 0 32px 0', width: '100%', maxWidth: 500 }}>
+        <table className="bias-table-participant" style={{ width: '100%', borderCollapse: 'collapse', background: '#232526', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.06)', overflow: 'hidden', margin: '0 auto' }}>
+          <thead>
+            <tr>
+              <th style={{ background: '#181a1b', color: '#61dafb', fontWeight: 700, fontSize: 15, padding: 10, textAlign: 'center', borderBottom: '1px solid #444' }}>Type</th>
+              <th style={{ background: '#181a1b', color: '#61dafb', fontWeight: 700, fontSize: 15, padding: 10, textAlign: 'center', borderBottom: '1px solid #444' }}>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={{ fontWeight: 600, color: '#fff', padding: 10, textAlign: 'center', borderBottom: '1px solid #333' }}>Call Bias</td>
+              <td style={{ fontWeight: 500, color: '#fff', padding: 10, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.call_participant || '-'}</td>
+            </tr>
+            <tr>
+              <td style={{ fontWeight: 600, color: '#fff', padding: 10, textAlign: 'center', borderBottom: '1px solid #333' }}>Put Bias</td>
+              <td style={{ fontWeight: 500, color: '#fff', padding: 10, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.put_participant || '-'}</td>
+            </tr>
+            <tr>
+              <td style={{ fontWeight: 700, color: '#61dafb', padding: 10, textAlign: 'center', borderBottom: '1px solid #333' }}>Overall Sentiment</td>
+              <td style={{ fontWeight: 700, color: biasColor(data.bias), padding: 10, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.bias || '-'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-      {/* Module Summary Table (copied from EntryLogicEngine) */}
-      <div className="entry-table-card" style={{ marginTop: 32, overflowX: 'auto' }}>
+      {/* Module Summary Table with extra margin below */}
+      <div className="entry-table-card" style={{ margin: '32px 0 0 0', overflowX: 'auto' }}>
         <table className="entry-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 700 }}>
           <thead>
             <tr>
