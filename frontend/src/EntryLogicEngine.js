@@ -149,42 +149,42 @@ export default function EntryLogicEngine() {
         <div style={{ color: '#fff', fontWeight: 700 }}>Reason: <span style={{ fontWeight: 400 }}>{data.reason || '-'}</span></div>
       </div>
       {/* Module Table Card */}
-      <div style={{ maxWidth: '900px', width: '100%', margin: '32px auto', padding: '0 16px' }}>
+      <div style={{ maxWidth: '700px', width: '100%', margin: '32px auto', padding: '0 8px' }}>
         <div className="entry-table-card" style={{ margin: 0, overflowX: 'auto', width: '100%' }}>
           <table className="entry-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 0, maxWidth: '100%' }}>
-          <thead>
-            <tr>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 16, color: '#fff', background: '#181a1b' }}>Module</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 16, color: '#fff', background: '#181a1b' }}>Key Output</th>
-              <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 16, width: 120, color: '#fff', background: '#181a1b' }}>Confidence/Score</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 16, color: '#fff', background: '#181a1b' }}>Summary</th>
-            </tr>
-          </thead>
-          <tbody>
-            {moduleTable.map((row, i) => (
-              <tr key={row.module} style={{ borderBottom: '1px solid #444', background: i % 2 === 0 ? '#232526' : '#181a1b' }}>
-                <td className="entry-table-module" style={{ padding: '10px 14px', fontWeight: 700, color: '#fff', verticalAlign: 'top' }}>{row.module}</td>
-                <td className="entry-table-key" style={{ padding: '10px 14px', verticalAlign: 'top', fontWeight: 600, color: '#fff' }}>{row.key}</td>
-                <td className="entry-table-confidence" style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 600, color: '#fff', verticalAlign: 'top' }}>{row.confidence}</td>
-                <td className="entry-table-summary" style={{ padding: '10px 14px', verticalAlign: 'top', fontSize: 14, color: '#fff' }}>
-                  {typeof row.summary === 'string' ? row.summary : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, color: '#fff' }}>
-                      {React.Children.toArray(
-                        typeof row.summary === 'object' && row.summary.props && row.summary.props.children
-                          ? (Array.isArray(row.summary.props.children) ? row.summary.props.children : [row.summary.props.children])
-                          : []
-                      ).map((item, idx) => (
-                        <div key={idx} style={{ color: '#fff', fontSize: 14 }}>{item}</div>
-                      ))}
-                    </div>
-                  )}
-                </td>
+            <thead>
+              <tr>
+                <th style={{ padding: '10px 10px', textAlign: 'left', fontSize: 15, color: '#fff', background: '#181a1b', width: 120 }}>Module</th>
+                <th style={{ padding: '10px 10px', textAlign: 'left', fontSize: 15, color: '#fff', background: '#181a1b', width: 160 }}>Key Output</th>
+                <th style={{ padding: '10px 8px', textAlign: 'right', fontSize: 15, width: 90, color: '#fff', background: '#181a1b' }}>Confidence/Score</th>
+                <th style={{ padding: '10px 10px', textAlign: 'left', fontSize: 14, color: '#fff', background: '#181a1b', maxWidth: 220, minWidth: 120, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>Summary</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {moduleTable.map((row, i) => (
+                <tr key={row.module} style={{ borderBottom: '1px solid #444', background: i % 2 === 0 ? '#232526' : '#181a1b' }}>
+                  <td className="entry-table-module" style={{ padding: '10px 10px', fontWeight: 700, color: '#fff', verticalAlign: 'top', width: 120 }}>{row.module}</td>
+                  <td className="entry-table-key" style={{ padding: '10px 10px', verticalAlign: 'top', fontWeight: 600, color: '#fff', width: 160 }}>{row.key}</td>
+                  <td className="entry-table-confidence" style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 600, color: '#fff', verticalAlign: 'top', width: 90 }}>{row.confidence}</td>
+                  <td className="entry-table-summary" style={{ padding: '10px 10px', verticalAlign: 'top', fontSize: 13, color: '#fff', maxWidth: 220, minWidth: 120, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+                    {typeof row.summary === 'string' ? row.summary : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, color: '#fff', fontSize: 13, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+                        {React.Children.toArray(
+                          typeof row.summary === 'object' && row.summary.props && row.summary.props.children
+                            ? (Array.isArray(row.summary.props.children) ? row.summary.props.children : [row.summary.props.children])
+                            : []
+                        ).map((item, idx) => (
+                          <div key={idx} style={{ color: '#fff', fontSize: 13, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>{item}</div>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
 } 
