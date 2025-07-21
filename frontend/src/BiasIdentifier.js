@@ -32,6 +32,14 @@ export default function BiasIdentifier() {
     return <div style={{ color: '#bbb', fontSize: 20 }}>No bias data.</div>;
   }
 
+  // Helper to check if all values in an object are zero or undefined
+  const isAllZeroOrMissing = obj => obj && Object.values(obj).every(v => !v || Math.abs(v) < 1e-6);
+
+  const showRollingDeltas = data.rolling_deltas !== undefined;
+  const showRollingPct = data.rolling_pct !== undefined;
+  const deltasAreBaseline = isAllZeroOrMissing(data.rolling_deltas);
+  const pctAreBaseline = isAllZeroOrMissing(data.rolling_pct);
+
   return (
     <div className="bias-root">
       {!fetching && (
@@ -65,80 +73,83 @@ export default function BiasIdentifier() {
                 <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>{data.puts && data.puts[col.key] !== undefined ? data.puts[col.key] : '-'}</td>
               ))}
             </tr>
-            {/* Rolling 10-min Difference Row */}
-            {data.rolling_deltas && (
-              <>
-                <tr style={{ background: '#232526' }}>
-                  <td rowSpan={2} style={{ fontWeight: 700, color: '#fff', padding: 4, fontSize: 16, textAlign: 'center', background: '#232526', borderRight: '1px solid #444', borderBottom: '1px solid #333', verticalAlign: 'middle' }}>
-                    10-min Δ
+            {/* Rolling 10-min Difference Row (always show) */}
+            <tr style={{ background: '#232526' }}>
+              <td rowSpan={2} style={{ fontWeight: 700, color: '#fff', padding: 4, fontSize: 16, textAlign: 'center', background: '#232526', borderRight: '1px solid #444', borderBottom: '1px solid #333', verticalAlign: 'middle' }}>
+                10-min Δ
+              </td>
+              <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Call</td>
+              {columns.map(col =>
+                ['volume', 'openInterest', 'iv'].includes(col.key) ? (
+                  <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
+                    {showRollingDeltas && data.rolling_deltas && data.rolling_deltas[`call_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
+                      ? data.rolling_deltas[`call_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2)
+                      : '-'}
                   </td>
-                  <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Call</td>
-                  {columns.map(col =>
-                    ['volume', 'openInterest', 'iv'].includes(col.key) ? (
-                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
-                        {data.rolling_deltas && data.rolling_deltas[`call_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
-                          ? data.rolling_deltas[`call_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2)
-                          : '-'}
-                      </td>
-                    ) : (
-                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
-                    )
-                  )}
-                </tr>
-                <tr style={{ background: '#181a1b' }}>
-                  <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Put</td>
-                  {columns.map(col =>
-                    ['volume', 'openInterest', 'iv'].includes(col.key) ? (
-                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
-                        {data.rolling_deltas && data.rolling_deltas[`put_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
-                          ? data.rolling_deltas[`put_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2)
-                          : '-'}
-                      </td>
-                    ) : (
-                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
-                    )
-                  )}
-                </tr>
-              </>
-            )}
-            {/* Rolling 10-min % Change Row */}
-            {data.rolling_pct && (
-              <>
-                <tr style={{ background: '#232526' }}>
-                  <td rowSpan={2} style={{ fontWeight: 700, color: '#fff', padding: 4, fontSize: 16, textAlign: 'center', background: '#232526', borderRight: '1px solid #444', borderBottom: '1px solid #333', verticalAlign: 'middle' }}>
-                    10-min %
+                ) : (
+                  <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
+                )
+              )}
+            </tr>
+            <tr style={{ background: '#181a1b' }}>
+              <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Put</td>
+              {columns.map(col =>
+                ['volume', 'openInterest', 'iv'].includes(col.key) ? (
+                  <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
+                    {showRollingDeltas && data.rolling_deltas && data.rolling_deltas[`put_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
+                      ? data.rolling_deltas[`put_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2)
+                      : '-'}
                   </td>
-                  <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Call</td>
-                  {columns.map(col =>
-                    ['volume', 'openInterest', 'iv'].includes(col.key) ? (
-                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
-                        {data.rolling_pct && data.rolling_pct[`call_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
-                          ? data.rolling_pct[`call_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2) + '%'
-                          : '-'}
-                      </td>
-                    ) : (
-                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
-                    )
-                  )}
-                </tr>
-                <tr style={{ background: '#181a1b' }}>
-                  <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Put</td>
-                  {columns.map(col =>
-                    ['volume', 'openInterest', 'iv'].includes(col.key) ? (
-                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
-                        {data.rolling_pct && data.rolling_pct[`put_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
-                          ? data.rolling_pct[`put_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2) + '%'
-                          : '-'}
-                      </td>
-                    ) : (
-                      <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
-                    )
-                  )}
-                </tr>
-              </>
-            )}
+                ) : (
+                  <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
+                )
+              )}
+            </tr>
+            {/* Rolling 10-min % Change Row (always show) */}
+            <tr style={{ background: '#232526' }}>
+              <td rowSpan={2} style={{ fontWeight: 700, color: '#fff', padding: 4, fontSize: 16, textAlign: 'center', background: '#232526', borderRight: '1px solid #444', borderBottom: '1px solid #333', verticalAlign: 'middle' }}>
+                10-min %
+              </td>
+              <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Call</td>
+              {columns.map(col =>
+                ['volume', 'openInterest', 'iv'].includes(col.key) ? (
+                  <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
+                    {showRollingPct && data.rolling_pct && data.rolling_pct[`call_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
+                      ? data.rolling_pct[`call_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2) + '%'
+                      : '-'}
+                  </td>
+                ) : (
+                  <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
+                )
+              )}
+            </tr>
+            <tr style={{ background: '#181a1b' }}>
+              <td style={{ fontWeight: 600, color: '#61dafb', padding: 4 }}>Put</td>
+              {columns.map(col =>
+                ['volume', 'openInterest', 'iv'].includes(col.key) ? (
+                  <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>
+                    {showRollingPct && data.rolling_pct && data.rolling_pct[`put_${col.key === 'openInterest' ? 'oi' : col.key}`] !== undefined
+                      ? data.rolling_pct[`put_${col.key === 'openInterest' ? 'oi' : col.key}`].toFixed(2) + '%'
+                      : '-'}
+                  </td>
+                ) : (
+                  <td key={col.key} style={{ padding: 4, borderBottom: '1px solid #333', textAlign: 'right', fontSize: 13 }}>-</td>
+                )
+              )}
+            </tr>
           </tbody>
         </table>
+        {/* Rolling window info message */}
+        {(!showRollingDeltas || !showRollingPct) && (
+          <div style={{ color: '#ffa726', fontWeight: 500, marginTop: 10 }}>
+            Waiting for rolling window data (need 10 minutes of history). Showing baseline values.
+          </div>
+        )}
+        {(deltasAreBaseline && pctAreBaseline && showRollingDeltas && showRollingPct) && (
+          <div style={{ color: '#ffa726', fontWeight: 500, marginTop: 10 }}>
+            Baseline (first fetch) — rolling window will update as more data accumulates.
+          </div>
+        )}
       </div>
       {/* Participant & Bias Table */}
       {(data.call_participant || data.put_participant || data.bias) && (
