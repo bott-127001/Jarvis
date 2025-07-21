@@ -39,6 +39,7 @@ export default function BiasIdentifier() {
   const showRollingPct = data.rolling_pct !== undefined;
   const deltasAreBaseline = isAllZeroOrMissing(data.rolling_deltas);
   const pctAreBaseline = isAllZeroOrMissing(data.rolling_pct);
+  const isBaseline = data.is_baseline;
 
   return (
     <div className="bias-root">
@@ -140,44 +141,37 @@ export default function BiasIdentifier() {
           </tbody>
         </table>
         {/* Rolling window info message */}
-        {(!showRollingDeltas || !showRollingPct) && (
-          <div style={{ color: '#ffa726', fontWeight: 500, marginTop: 10 }}>
-            Waiting for rolling window data (need 10 minutes of history). Showing baseline values.
-          </div>
-        )}
-        {(deltasAreBaseline && pctAreBaseline && showRollingDeltas && showRollingPct) && (
+        {(isBaseline || (deltasAreBaseline && pctAreBaseline && showRollingDeltas && showRollingPct)) && (
           <div style={{ color: '#ffa726', fontWeight: 500, marginTop: 10 }}>
             Baseline (first fetch) — rolling window will update as more data accumulates.
           </div>
         )}
       </div>
-      {/* Participant & Bias Table */}
-      {(data.call_participant || data.put_participant || data.bias) && (
-        <div className="bias-participant-table-wrapper">
-          <table className="bias-table-participant">
-            <thead>
-              <tr>
-                <th style={{ background: '#181a1b', color: '#61dafb', fontWeight: 700, fontSize: 14, padding: 6, textAlign: 'center', borderBottom: '1px solid #444' }}>Type</th>
-                <th style={{ background: '#181a1b', color: '#61dafb', fontWeight: 700, fontSize: 14, padding: 6, textAlign: 'center', borderBottom: '1px solid #444' }}>Participant</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style={{ fontWeight: 600, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Call</td>
-                <td style={{ fontWeight: 500, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.call_participant || '-'}</td>
-              </tr>
-              <tr>
-                <td style={{ fontWeight: 600, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Put</td>
-                <td style={{ fontWeight: 500, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.put_participant || '-'}</td>
-              </tr>
-              <tr>
-                <td style={{ fontWeight: 700, color: '#61dafb', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Bias</td>
-                <td style={{ fontWeight: 700, color: biasColor(data.bias), padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.bias || '-'}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Always show Participant & Bias Table */}
+      <div className="bias-participant-table-wrapper">
+        <table className="bias-table-participant">
+          <thead>
+            <tr>
+              <th style={{ background: '#181a1b', color: '#61dafb', fontWeight: 700, fontSize: 14, padding: 6, textAlign: 'center', borderBottom: '1px solid #444' }}>Type</th>
+              <th style={{ background: '#181a1b', color: '#61dafb', fontWeight: 700, fontSize: 14, padding: 6, textAlign: 'center', borderBottom: '1px solid #444' }}>Participant</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={{ fontWeight: 600, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Call</td>
+              <td style={{ fontWeight: 500, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.call_participant || '-'}</td>
+            </tr>
+            <tr>
+              <td style={{ fontWeight: 600, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Put</td>
+              <td style={{ fontWeight: 500, color: '#fff', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.put_participant || '-'}</td>
+            </tr>
+            <tr>
+              <td style={{ fontWeight: 700, color: '#61dafb', padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>Bias</td>
+              <td style={{ fontWeight: 700, color: biasColor(data.bias), padding: 6, textAlign: 'center', borderBottom: '1px solid #333' }}>{data.bias || '-'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 } 

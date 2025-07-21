@@ -260,9 +260,15 @@ async def bias_identifier(user: str, expiry: str):
             k: (rolling_deltas[k] / old_doc[k]) * 100 if old_doc[k] else 0
             for k in rolling_deltas
         }
+        is_baseline = False
     else:
-        rolling_deltas = None
-        rolling_pct = None
+        rolling_deltas = {
+            "call_oi": 0, "put_oi": 0, "call_iv": 0, "put_iv": 0, "call_volume": 0, "put_volume": 0
+        }
+        rolling_pct = {
+            "call_oi": 0, "put_oi": 0, "call_iv": 0, "put_iv": 0, "call_volume": 0, "put_volume": 0
+        }
+        is_baseline = True
     # Purge old data (>15 min)
     rolling_col.delete_many({"user": user, "expiry": expiry, "timestamp": {"$lt": now - timedelta(minutes=15)}})
 
@@ -359,7 +365,8 @@ async def bias_identifier(user: str, expiry: str):
         "spot": spot,
         "call_participant": call_position,
         "put_participant": put_position,
-        "bias": bias
+        "bias": bias,
+        "is_baseline": is_baseline
     } 
     # ML inference
     ml_features = [
