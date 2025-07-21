@@ -214,6 +214,13 @@ async def bias_identifier(user: str, expiry: str):
         ("volume", "call_volume", "put_volume"),
         ("openInterest", "call_oi", "put_oi"),
         ("iv", "call_iv", "put_iv"),
+        ("bidQty", "call_bidQty", "put_bidQty"),
+        ("askQty", "call_askQty", "put_askQty"),
+        ("bidPrice", "call_bidPrice", "put_bidPrice"),
+        ("askPrice", "call_askPrice", "put_askPrice"),
+        ("theta", "call_theta", "put_theta"),
+        ("vega", "call_vega", "put_vega"),
+        ("gamma", "call_gamma", "put_gamma"),
     ]
     def agg(rows, call_or_put):
         result = {}
