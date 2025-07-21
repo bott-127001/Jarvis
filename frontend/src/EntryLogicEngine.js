@@ -41,38 +41,38 @@ export default function EntryLogicEngine() {
 
   // Module summary table (if available)
   const raw = data.raw_signals || {};
-  const moduleTable = [
-    {
-      module: 'Bias Identifier',
+const moduleTable = [
+  {
+    module: 'Bias Identifier',
       key: raw.bias?.bias || '-',
       confidence: '-',
       summary: raw.bias ? JSON.stringify(raw.bias) : '-',
-    },
-    {
-      module: 'Market Style',
+  },
+  {
+    module: 'Market Style',
       key: raw.style?.market_style || '-',
       confidence: '-',
       summary: raw.style ? JSON.stringify(raw.style) : '-',
-    },
-    {
-      module: 'Trap Detector',
+  },
+  {
+    module: 'Trap Detector',
       key: `Call: ${raw.trap?.call?.trap_type || '-'} (${raw.trap?.call?.confidence_level || '-'}) | Put: ${raw.trap?.put?.trap_type || '-'} (${raw.trap?.put?.confidence_level || '-'})`,
       confidence: `Call: ${raw.trap?.call?.confidence_level || '-'} | Put: ${raw.trap?.put?.confidence_level || '-'}`,
       summary: raw.trap ? JSON.stringify(raw.trap) : '-',
-    },
-    {
-      module: 'Reversal Probability',
+  },
+  {
+    module: 'Reversal Probability',
       key: raw.reversal?.reversal_type || '-',
       confidence: raw.reversal ? `${(raw.reversal.reversal_probability * 100).toFixed(0)}%` : '-',
       summary: raw.reversal ? JSON.stringify(raw.reversal) : '-',
-    },
-    {
-      module: 'Support/Resistance',
+  },
+  {
+    module: 'Support/Resistance',
       key: Array.isArray(raw.sr) && raw.sr.length > 0 ? `${raw.sr.length} zones` : '-',
-      confidence: '-',
+    confidence: '-',
       summary: raw.sr ? JSON.stringify(raw.sr) : '-',
-    },
-  ];
+  },
+];
 
   return (
     <div className="entry-root">

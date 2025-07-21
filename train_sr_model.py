@@ -1,0 +1,48 @@
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+import joblib
+import datetime
+import os
+
+# 1. Load data
+CSV = 'support_resistance_snapshots_labeled.csv'
+LOG = 'ml_logs/sr_training.log'
+MODEL = 'ml_models/support_resistance_model.pkl'
+df = pd.read_csv(CSV)
+
+# 2. Features and target
+features = [
+    'zone_type', 'zone_state', 'confidence_score', 'volatility_regime',
+    'trap_risk', 'bias_suggestion', 'signal_disagreement', 'spot_delta'
+]
+# Convert categorical features to numeric
+for col in ['zone_type', 'zone_state', 'volatility_regime', 'bias_suggestion']:
+    if col in df:
+        df[col] = df[col].astype('category').cat.codes
+X = df[features]
+y = df['true_outcome'].astype('category').cat.codes
+
+# 3. Train/test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# 4. Train model
+clf = RandomForestClassifier(n_estimators=100, random_state=42)
+clf.fit(X_train, y_train)
+
+# 5. Evaluate
+y_pred = clf.predict(X_test)
+report = classification_report(y_test, y_pred)
+print(report)
+
+# 6. Save model
+os.makedirs('ml_models', exist_ok=True)
+os.makedirs('ml_logs', exist_ok=True)
+joblib.dump(clf, MODEL)
+
+# 7. Log metrics
+with open(LOG, 'a') as f:
+    f.write(f'[{datetime.datetime.now()}] Training run for Support/Resistance Guard\n')
+    f.write(report + '\n')
+    f.write(f'Model saved to {MODEL}\n\n') 

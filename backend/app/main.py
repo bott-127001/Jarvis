@@ -14,6 +14,10 @@ from fastapi import status
 import traceback
 from dateutil import parser
 from fastapi.staticfiles import StaticFiles
+import joblib
+from .ml_inference import (
+    predict_bias, predict_market_style, predict_trap, predict_reversal, predict_sr, predict_entry_logic
+)
 
 load_dotenv()
 
@@ -225,8 +229,8 @@ async def bias_identifier(user: str, expiry: str):
     now = datetime.utcnow()
     # Insert current snapshot
     rolling_col.insert_one({
-        "user": user,
-        "expiry": expiry,
+                "user": user,
+                "expiry": expiry,
         "timestamp": now,
         "call_oi": call_totals["openInterest"],
         "put_oi": put_totals["openInterest"],
@@ -354,7 +358,20 @@ async def bias_identifier(user: str, expiry: str):
         "call_participant": call_position,
         "put_participant": put_position,
         "bias": bias
-    }
+    } 
+    # ML inference
+    ml_features = [
+        output['rolling_pct'].get('call_oi'), output['rolling_pct'].get('call_iv'), output['rolling_pct'].get('call_volume'),
+        output['rolling_pct'].get('put_oi'), output['rolling_pct'].get('put_iv'), output['rolling_pct'].get('put_volume'),
+        output['spot'], output['price_direction'], output['call_participant'], output['put_participant'], output['bias']
+    ]
+    try:
+        ml_result = predict_bias(ml_features)
+        output['ml_predicted_bias'] = ml_result['predicted']
+        output['ml_probabilities'] = ml_result['probabilities']
+        output['ml_confidence'] = ml_result['confidence']
+    except Exception as e:
+        output['ml_error'] = str(e)
     # Persist output for ML/audit
     db["bias_identifier_snapshots"].insert_one({
         **output,
@@ -542,7 +559,19 @@ async def market_style_identifier(user: str, expiry: str, mode: str = Query("ada
         "total_volume": total_volume,
         "total_oi": total_oi,
         "mode": mode
-    }
+    } 
+    # ML inference
+    ml_features = [
+        output['price_direction'], output['oi_diff'], output['vol_diff'], output['iv_diff'], output['volatility_state'],
+        output['baseline_used'], output['spot_trend_strength'], output['total_volume'], output['total_oi'], output['mode']
+    ]
+    try:
+        ml_result = predict_market_style(ml_features)
+        output['ml_predicted_market_style'] = ml_result['predicted']
+        output['ml_probabilities'] = ml_result['probabilities']
+        output['ml_confidence'] = ml_result['confidence']
+    except Exception as e:
+        output['ml_error'] = str(e)
     db["market_style_snapshots"].insert_one({
         **output,
         "user": user,
@@ -679,7 +708,19 @@ async def reversal_probability_finder(user: str, expiry: str):
         "market_style": market_style,
         "trap_detected": bool(trap_detected),
         "reasoning": reasoning
-    }
+    } 
+    # ML inference
+    ml_features = [
+        output['reversal_probability'], output['bias_cluster_flipped'], output['iv_oi_support_flip'], output['price_vs_bias_conflict'],
+        output['liquidity_ok'], output['structural_context'], output['volatility_phase'], output['market_style'], output['trap_detected']
+    ]
+    try:
+        ml_result = predict_reversal(ml_features)
+        output['ml_predicted_reversal'] = ml_result['predicted']
+        output['ml_probabilities'] = ml_result['probabilities']
+        output['ml_confidence'] = ml_result['confidence']
+    except Exception as e:
+        output['ml_error'] = str(e)
     db["reversal_probability_snapshots"].insert_one({
         **output,
         "user": user,
@@ -886,7 +927,19 @@ async def trap_detector(user: str, expiry: str):
             "comment": "; ".join(put_comment) or "No trap detected",
             "trap_memory": trap_count
         }
-    }
+    } 
+    # ML inference
+    ml_features = [
+        output['call']['trap_detected'], output['put']['trap_detected'], output['call']['deception_score'], output['put']['deception_score'],
+        output['call']['confidence_level'], output['put']['confidence_level'], output['call']['comment'], output['put']['comment']
+    ]
+    try:
+        ml_result = predict_trap(ml_features)
+        output['ml_predicted_trap'] = ml_result['predicted']
+        output['ml_probabilities'] = ml_result['probabilities']
+        output['ml_confidence'] = ml_result['confidence']
+    except Exception as e:
+        output['ml_error'] = str(e)
     db["trap_detector_snapshots"].insert_one({
         **output,
         "user": user,
@@ -1061,6 +1114,18 @@ async def support_resistance_guard(user: str, expiry: str):
             "signal_disagreement": bool(signal_disagreement)
         })
     output = results
+    # ML inference
+    ml_features = [
+        output['zone_state'], output['bias_suggestion'], output['confidence'], output['confidence_score'],
+        output['volatility_regime'], output['trap_risk'], output['last_test_time'], output['signal_disagreement']
+    ]
+    try:
+        ml_result = predict_sr(ml_features)
+        output['ml_predicted_sr'] = ml_result['predicted']
+        output['ml_probabilities'] = ml_result['probabilities']
+        output['ml_confidence'] = ml_result['confidence']
+    except Exception as e:
+        output['ml_error'] = str(e)
     db["support_resistance_snapshots"].insert_one({
         "zones": results,
         "user": user,
@@ -1237,6 +1302,22 @@ async def entry_logic_engine(user: str, expiry: str, mode: str = Query("adaptive
         "timestamp": datetime.utcnow(),
         "trigger": "entry_decision"
     })
+    # ML inference
+    ml_features = [
+        entry_direction, trade_type, entry_score, confidence, must_avoid,
+        entry_zone["zone_type"] if entry_zone else None,
+        entry_zone["confidence"] if entry_zone else None,
+        entry_zone["zone_level"] if entry_zone else None
+    ]
+    try:
+        ml_result = predict_entry_logic(ml_features)
+        ml_pred = ml_result['predicted']
+        ml_probs = ml_result['probabilities']
+        ml_conf = ml_result['confidence']
+    except Exception as e:
+        ml_pred = None
+        ml_probs = None
+        ml_conf = str(e)
     return {
         "entry_direction": entry_direction,
         "entry_zone": entry_zone,
@@ -1245,6 +1326,9 @@ async def entry_logic_engine(user: str, expiry: str, mode: str = Query("adaptive
         "must_avoid": must_avoid,
         "trade_type": trade_type,
         "entry_score": round(entry_score, 2),
+        "ml_predicted_entry": ml_pred,
+        "ml_probabilities": ml_probs,
+        "ml_confidence": ml_conf,
         "raw_signals": log_entry["raw_signals"],
         "rejections": log_entry["rejections"],
         "conflicts": log_entry["conflicts"]
