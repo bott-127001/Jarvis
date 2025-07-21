@@ -185,5 +185,6 @@ export default function EntryLogicEngine() {
         </table>
       </div>
     </div>
-  );
+  </div>
+);
 } 
