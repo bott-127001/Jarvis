@@ -137,20 +137,20 @@ export default function EntryLogicEngine() {
           <span className="entry-status-icon" style={{ fontSize: 38, marginRight: 16 }}>{icon}</span>
           <span className="entry-status-label" style={{ color, fontWeight: 700, fontSize: 32 }}>{data.entry_direction || '-'}</span>
         </div>
-        <div className="entry-status-fields" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 8 }}>
-          <div style={{ fontWeight: 600 }}>Confidence: <span style={{ color: confColorVal }}>{conf}</span></div>
-          <div>Trade Type: <span style={{ fontWeight: 500 }}>{tradeType}</span></div>
-          <div>Entry Score: <span style={{ fontWeight: 500 }}>{entryScore}</span></div>
-          <div>Entry Zone: <span style={{ fontWeight: 500 }}>{data.entry_zone ? `${data.entry_zone.zone_type} @ ${data.entry_zone.zone_level} (${data.entry_zone.confidence})` : '-'}</span></div>
-          <div>Must Avoid: <span style={{ color: data.must_avoid ? '#e53935' : '#43a047', fontWeight: 600 }}>{data.must_avoid ? 'Yes' : 'No'}</span></div>
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ fontWeight: 700, color: '#fff' }}>Confidence:</span> <span style={{ color: confColorVal }}>{conf}</span>
+          <span style={{ color: '#fff', marginLeft: 16, fontWeight: 700 }}>Trade Type:</span> <span style={{ color: '#fff' }}>{tradeType}</span>
+          <span style={{ color: '#fff', marginLeft: 16, fontWeight: 700 }}>Entry Score:</span> <span style={{ color: '#fff' }}>{entryScore}</span>
         </div>
-        <div className="entry-status-reason" style={{ fontWeight: 600, color: '#fff', marginTop: 8 }}>
-          Reason: <span style={{ fontWeight: 400 }}>{data.reason}</span>
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ color: '#fff', fontWeight: 700 }}>Entry Zone:</span> <span style={{ color: '#fff' }}>{data.entry_zone ? data.entry_zone.zone_type + ' @ ' + data.entry_zone.zone_level : '-'}</span>
+          <span style={{ color: '#fff', marginLeft: 16, fontWeight: 700 }}>Must Avoid:</span> <span style={{ color: data.must_avoid ? '#e53935' : '#43a047', fontWeight: 700 }}>{data.must_avoid ? 'Yes' : 'No'}</span>
         </div>
+        <div style={{ color: '#fff', fontWeight: 700 }}>Reason: <span style={{ fontWeight: 400 }}>{data.reason || '-'}</span></div>
       </div>
       {/* Module Table Card */}
-      <div className="entry-table-card" style={{ margin: '32px 0 32px 0', overflowX: 'auto' }}>
-        <table className="entry-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 700, color: '#fff' }}>
+      <div className="entry-table-card" style={{ margin: '32px auto', overflowX: 'auto', maxWidth: '900px', minWidth: '0', width: '100%' }}>
+        <table className="entry-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 0, maxWidth: '100%' }}>
           <thead>
             <tr>
               <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 16, color: '#fff', background: '#181a1b' }}>Module</th>
