@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Query, HTTPException, Request, Body, Response
+from fastapi import FastAPI, Query, HTTPException, Request, Body, Response, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -16,8 +16,10 @@ from dateutil import parser
 from fastapi.staticfiles import StaticFiles
 import joblib
 from .ml_inference import (
-    predict_bias, predict_market_style, predict_trap, predict_reversal, predict_sr, predict_entry_logic
+    predict_bias, predict_market_style, predict_trap, predict_reversal, predict_sr, predict_entry_logic, predict_anomaly_score, predict_meta_decision
 )
+import threading
+import time
 
 load_dotenv()
 
@@ -1138,6 +1140,50 @@ async def support_resistance_guard(user: str, expiry: str):
 # Internal logging collection for transparency
 entry_engine_log_col = db["entry_logic_engine_logs"]
 
+def confidence_weighted_sizer(entry_confidence, entry_direction, volatility_regime=None, max_position_size=3.0):
+    """
+    Maps entry_confidence (0-1) to position_size_factor, confidence_bucket, and risk_adjusted_action.
+    Applies volatility adjustment and enforces risk caps.
+    """
+    # Tiered bucket system
+    if entry_confidence >= 0.90:
+        position_size_factor = 3.0
+        confidence_bucket = "very high"
+    elif entry_confidence >= 0.80:
+        position_size_factor = 2.5
+        confidence_bucket = "high"
+    elif entry_confidence >= 0.70:
+        position_size_factor = 2.0
+        confidence_bucket = "moderate-high"
+    elif entry_confidence >= 0.60:
+        position_size_factor = 1.0
+        confidence_bucket = "moderate"
+    elif entry_confidence >= 0.50:
+        position_size_factor = 0.5
+        confidence_bucket = "low"
+    else:
+        position_size_factor = 0.0
+        confidence_bucket = "skip"
+
+    # Volatility adjustment
+    if volatility_regime == "volatile":
+        position_size_factor *= 0.8
+    # Enforce min size (unless confidence < 0.5)
+    if entry_confidence >= 0.5 and position_size_factor < 0.25:
+        position_size_factor = 0.25
+    # Enforce max cap
+    position_size_factor = min(position_size_factor, max_position_size)
+    # Risk adjusted action
+    if entry_direction == "avoid" or position_size_factor == 0.0:
+        risk_adjusted_action = "No trade: confidence too low or avoid signal."
+    else:
+        risk_adjusted_action = f"Initiate {entry_direction} position at {position_size_factor:.2f}x base size due to {confidence_bucket} confidence setup" + (f" in {volatility_regime} market." if volatility_regime else ".")
+    return {
+        "position_size_factor": round(position_size_factor, 2),
+        "confidence_bucket": confidence_bucket,
+        "risk_adjusted_action": risk_adjusted_action
+    }
+
 @app.get("/entry-logic-engine")
 async def entry_logic_engine(user: str, expiry: str, mode: str = Query("adaptive", enum=["strict", "adaptive"])):
     """
@@ -1293,7 +1339,64 @@ async def entry_logic_engine(user: str, expiry: str, mode: str = Query("adaptive
     else:
         confidence = "low"
     reason = " ".join(reasons)
-    log_entry["final_decision"] = {"entry_direction": entry_direction, "entry_zone": entry_zone, "confidence": confidence, "reason": reason, "must_avoid": must_avoid, "trade_type": trade_type, "entry_score": round(entry_score, 2)}
+    # --- ConfidenceWeightedSizer integration ---
+    entry_confidence = entry_score  # float 0-1
+    volatility_regime = style["volatility_state"] if style and "volatility_state" in style else None
+    sizer_result = confidence_weighted_sizer(entry_confidence, entry_direction, volatility_regime)
+    # --- Anomaly Detection Engine integration ---
+    anomaly_features = extract_anomaly_features(bias, style, trap, reversal, sr, sizer_result, now)
+    module_preds = {
+        "bias": bias["bias"] if bias else None,
+        "style": style["market_style"] if style else None,
+        "trap": trap["call"]["trap_detected"] if trap and "call" in trap else None,
+        "reversal": reversal["reversal_type"] if reversal else None,
+        "sr": sr[0]["bias_suggestion"] if sr and isinstance(sr, list) and len(sr) > 0 else None,
+        "entry": entry_direction
+    }
+    entropy = compute_module_entropy(module_preds)
+    anomaly_score = predict_anomaly_score(anomaly_features)
+    # Optionally blend entropy into anomaly score
+    blended_score = min(1.0, 0.7 * anomaly_score + 0.3 * entropy)
+    anomaly_detected = blended_score >= ANOMALY_THRESHOLD
+    anomaly_reason = None
+    if anomaly_detected:
+        anomaly_reason = f"Anomalous market state detected (score={blended_score:.2f}, entropy={entropy:.2f}). Entry confidence downgraded."
+        # Downgrade entry confidence and position size
+        entry_confidence = min(entry_confidence, 0.4)
+        sizer_result = confidence_weighted_sizer(entry_confidence, entry_direction, volatility_regime)
+    # --- Auto-Adaptive Trade Sizing ---
+    recommended_position_size = auto_adaptive_trade_sizer(entry_confidence, blended_score, market_style)
+    # Log anomaly event
+    db["anomaly_log"].insert_one({
+        "timestamp": now,
+        "user": user,
+        "expiry": expiry,
+        "anomaly_score": float(blended_score),
+        "entropy": float(entropy),
+        "anomaly_detected": anomaly_detected,
+        "anomaly_reason": anomaly_reason,
+        "features": anomaly_features,
+        "module_preds": module_preds,
+        "raw_signals": log_entry["raw_signals"],
+        "entry_confidence": entry_confidence,
+        "sizer_result": sizer_result,
+        "recommended_position_size": recommended_position_size
+    })
+    # Log sizing decision
+    db["confidence_sizer_logs"].insert_one({
+        "timestamp": datetime.utcnow(),
+        "user": user,
+        "expiry": expiry,
+        "entry_confidence": entry_confidence,
+        "entry_direction": entry_direction,
+        "volatility_regime": volatility_regime,
+        **sizer_result,
+        "raw_signals": log_entry["raw_signals"],
+        "final_decision": log_entry["final_decision"],
+        "recommended_position_size": recommended_position_size
+    })
+    log_entry["final_decision"].update(sizer_result)
+    log_entry["final_decision"]["recommended_position_size"] = recommended_position_size
     entry_engine_log_col.insert_one(log_entry)
     db["entry_logic_snapshots"].insert_one({
         **log_entry["final_decision"],
@@ -1318,6 +1421,44 @@ async def entry_logic_engine(user: str, expiry: str, mode: str = Query("adaptive
         ml_pred = None
         ml_probs = None
         ml_conf = str(e)
+    # --- Meta-Model Feature Vector ---
+    meta_features = [
+        entry_score,
+        confidence,
+        blended_score,
+        bias["bias"] if bias else None,
+        style["market_style"] if style else None,
+        trap["call"]["trap_detected"] if trap and "call" in trap else None,
+        reversal["reversal_type"] if reversal else None,
+        sr[0]["confidence"] if sr and isinstance(sr, list) and len(sr) > 0 else None,
+    ]
+    meta_decision = predict_meta_decision(meta_features)
+    # Log meta-model decision
+    log_entry["final_decision"]["meta_model_decision"] = meta_decision["should_enter"]
+    log_entry["final_decision"]["meta_model_probability"] = meta_decision["probability"]
+    # --- Auto-Journaling ---
+    journal_entry = {
+        "timestamp": now,
+        "user": user,
+        "expiry": expiry,
+        "entry_direction": entry_direction,
+        "recommended_position_size": recommended_position_size,
+        "meta_model_decision": meta_decision["should_enter"],
+        "meta_model_probability": meta_decision["probability"],
+        "must_avoid": must_avoid,
+        "reason": reason,
+        "outcome": log_entry["final_decision"].get("outcome"),
+        "raw_signals": log_entry["raw_signals"],
+        "anomaly_score": float(blended_score),
+        "modules_triggered": [
+            m for m in ["bias", "reversal", "trap", "meta_model"]
+            if (m == "meta_model" and meta_decision["should_enter"])
+            or (m == "bias" and bias_dir)
+            or (m == "reversal" and reversal_type)
+            or (m == "trap" and (trap_call.get("trap_detected") or trap_put.get("trap_detected")))
+        ]
+    }
+    db["trade_journal"].insert_one(journal_entry)
     return {
         "entry_direction": entry_direction,
         "entry_zone": entry_zone,
@@ -1331,7 +1472,14 @@ async def entry_logic_engine(user: str, expiry: str, mode: str = Query("adaptive
         "ml_confidence": ml_conf,
         "raw_signals": log_entry["raw_signals"],
         "rejections": log_entry["rejections"],
-        "conflicts": log_entry["conflicts"]
+        "conflicts": log_entry["conflicts"],
+        **sizer_result,
+        "anomaly_detected": anomaly_detected,
+        "anomaly_score": float(blended_score),
+        "anomaly_reason": anomaly_reason,
+        "recommended_position_size": recommended_position_size,
+        "meta_model_decision": meta_decision["should_enter"],
+        "meta_model_probability": meta_decision["probability"],
     } 
 
 @app.post("/clear-analytics")
@@ -1353,3 +1501,278 @@ def clear_analytics(user: str, expiry: str):
 # Serve React build as static files
 frontend_build_path = os.path.join(os.path.dirname(__file__), '../../frontend/build')
 app.mount("/", StaticFiles(directory=frontend_build_path, html=True), name="static") 
+
+# Expose sizer via API
+from fastapi import Body
+@app.post("/entry/recommendation")
+def entry_recommendation(
+    entry_confidence: float = Body(...),
+    entry_direction: str = Body(...),
+    volatility_regime: str = Body(None)
+):
+    result = confidence_weighted_sizer(entry_confidence, entry_direction, volatility_regime)
+    # Log API call
+    db["confidence_sizer_logs"].insert_one({
+        "timestamp": datetime.utcnow(),
+        "entry_confidence": entry_confidence,
+        "entry_direction": entry_direction,
+        "volatility_regime": volatility_regime,
+        **result,
+        "trigger": "api"
+    })
+    return result
+
+ANOMALY_THRESHOLD = float(os.getenv("ANOMALY_THRESHOLD", 0.75))
+
+# --- Anomaly Detection Engine ---
+def compute_module_entropy(module_outputs):
+    """
+    Compute a simple entropy/disagreement metric across module predictions.
+    module_outputs: dict of {module_name: prediction}
+    Returns: float (0-1)
+    """
+    from collections import Counter
+    preds = [str(v) for v in module_outputs.values() if v is not None]
+    if not preds:
+        return 0.0
+    counts = Counter(preds)
+    probs = [c / len(preds) for c in counts.values()]
+    entropy = -sum(p * np.log2(p) for p in probs if p > 0)
+    max_entropy = np.log2(len(counts)) if len(counts) > 1 else 1
+    return float(entropy / max_entropy) if max_entropy > 0 else 0.0
+
+def extract_anomaly_features(bias, style, trap, reversal, sr, sizer_result, now):
+    """
+    Extracts the anomaly feature vector from module outputs and context.
+    Returns: list of floats/ints for anomaly model.
+    """
+    # Example feature extraction (must match training):
+    # ∆OI, ∆IV, ∆Volume for CE & PE, spot ∆ vs 10-min avg, market style (encoded), S/R proximity, trap memory, confidence scores, time of day
+    ce_oi = bias['rolling_deltas']['call_oi'] if bias and bias.get('rolling_deltas') else 0
+    ce_iv = bias['rolling_deltas']['call_iv'] if bias and bias.get('rolling_deltas') else 0
+    ce_vol = bias['rolling_deltas']['call_volume'] if bias and bias.get('rolling_deltas') else 0
+    pe_oi = bias['rolling_deltas']['put_oi'] if bias and bias.get('rolling_deltas') else 0
+    pe_iv = bias['rolling_deltas']['put_iv'] if bias and bias.get('rolling_deltas') else 0
+    pe_vol = bias['rolling_deltas']['put_volume'] if bias and bias.get('rolling_deltas') else 0
+    spot = bias['spot'] if bias and 'spot' in bias else 0
+    rolling_avg = bias['rolling_pct']['call_oi'] if bias and bias.get('rolling_pct') else 0
+    spot_delta = spot - rolling_avg if spot and rolling_avg else 0
+    # Market style encoding
+    style_label = style['market_style'] if style and 'market_style' in style else 'Unknown'
+    style_map = {"Trending": 0, "Sideways": 1, "Volatile": 2, "Unknown": 3}
+    style_enc = style_map.get(style_label, 3)
+    # S/R proximity (min distance to active zone)
+    sr_zones = sr if isinstance(sr, list) else []
+    sr_prox = min([abs(spot - z['zone_level']) for z in sr_zones if 'zone_level' in z and z['zone_state'] == 'Active'], default=999)
+    # Trap memory
+    trap_mem = max(trap['call']['trap_memory'] if trap and 'call' in trap and 'trap_memory' in trap['call'] else 0,
+                  trap['put']['trap_memory'] if trap and 'put' in trap and 'trap_memory' in trap['put'] else 0)
+    # Confidence scores
+    bias_conf = bias.get('ml_confidence', 0) if bias else 0
+    trap_conf = trap.get('ml_confidence', 0) if trap else 0
+    reversal_conf = reversal.get('ml_confidence', 0) if reversal else 0
+    sr_conf = sr[0].get('ml_confidence', 0) if sr and isinstance(sr, list) and len(sr) > 0 else 0
+    entry_conf = sizer_result.get('position_size_factor', 0) if sizer_result else 0
+    # Time of day (minutes since midnight)
+    tod = now.hour * 60 + now.minute
+    return [ce_oi, ce_iv, ce_vol, pe_oi, pe_iv, pe_vol, spot_delta, style_enc, sr_prox, trap_mem, bias_conf, trap_conf, reversal_conf, sr_conf, entry_conf, tod]
+
+LOOKAHEAD_MINUTES = int(os.getenv("OUTCOME_LOOKAHEAD_MINUTES", 10))
+PRICE_MOVE_THRESHOLD = float(os.getenv("OUTCOME_PRICE_MOVE_THRESHOLD", 0.1))
+LABELER_SLEEP = int(os.getenv("OUTCOME_LABELER_SLEEP", 60))  # seconds between checks
+
+# --- Outcome Labeling Logic for All Modules ---
+def label_entry_logic_outcomes():
+    entries = list(db["entry_logic_snapshots"].find({"outcome": {"$exists": False}}))
+    for entry in entries:
+        ts = entry["timestamp"]
+        user = entry["user"]
+        expiry = entry["expiry"]
+        direction = entry.get("entry_direction")
+        # Find future price after lookahead
+        future = db["option_chain_snapshots"].find_one({
+            "user": user,
+            "expiry": expiry,
+            "timestamp": {"$gte": ts + timedelta(minutes=LOOKAHEAD_MINUTES)}
+        }, sort=[("timestamp", 1)])
+        spot_now = entry.get("raw_signals", {}).get("bias", {}).get("spot")
+        spot_future = future["strikes"][0].get("underlying_spot_price") if future and future.get("strikes") else None
+        if spot_now is None or spot_future is None:
+            continue
+        # Win if price moves in predicted direction by threshold
+        if direction == "long" and (spot_future - spot_now) > PRICE_MOVE_THRESHOLD:
+            outcome = 1
+        elif direction == "short" and (spot_now - spot_future) > PRICE_MOVE_THRESHOLD:
+            outcome = 1
+        else:
+            outcome = 0
+        db["entry_logic_snapshots"].update_one({"_id": entry["_id"]}, {"$set": {"outcome": outcome}})
+        print(f"[EntryLogic] Labeled {ts} as {'WIN' if outcome else 'LOSS'}")
+
+def label_bias_outcomes():
+    docs = list(db["bias_identifier_snapshots"].find({"outcome": {"$exists": False}}))
+    for doc in docs:
+        ts = doc["timestamp"]
+        user = doc["user"]
+        expiry = doc["expiry"]
+        bias = doc.get("bias")
+        future = db["option_chain_snapshots"].find_one({
+            "user": user,
+            "expiry": expiry,
+            "timestamp": {"$gte": ts + timedelta(minutes=LOOKAHEAD_MINUTES)}
+        }, sort=[("timestamp", 1)])
+        spot_now = doc.get("spot")
+        spot_future = future["strikes"][0].get("underlying_spot_price") if future and future.get("strikes") else None
+        if spot_now is None or spot_future is None:
+            continue
+        # Win if bias matches actual price direction
+        if bias == "Bullish" and (spot_future - spot_now) > PRICE_MOVE_THRESHOLD:
+            outcome = 1
+        elif bias == "Bearish" and (spot_now - spot_future) > PRICE_MOVE_THRESHOLD:
+            outcome = 1
+        elif bias == "Sideways" and abs(spot_future - spot_now) < PRICE_MOVE_THRESHOLD:
+            outcome = 1
+        else:
+            outcome = 0
+        db["bias_identifier_snapshots"].update_one({"_id": doc["_id"]}, {"$set": {"outcome": outcome}})
+        print(f"[Bias] Labeled {ts} as {'WIN' if outcome else 'LOSS'}")
+
+def label_market_style_outcomes():
+    docs = list(db["market_style_snapshots"].find({"outcome": {"$exists": False}}))
+    for doc in docs:
+        ts = doc["timestamp"]
+        user = doc["user"]
+        expiry = doc["expiry"]
+        style = doc.get("market_style")
+        future = db["option_chain_snapshots"].find_one({
+            "user": user,
+            "expiry": expiry,
+            "timestamp": {"$gte": ts + timedelta(minutes=LOOKAHEAD_MINUTES)}
+        }, sort=[("timestamp", 1)])
+        spot_now = doc.get("spot_trend_strength")
+        spot_future = None
+        if future and future.get("strikes"):
+            # Compute realized trend over lookahead
+            spot_start = doc.get("spot_trend_strength")
+            spot_end = future["strikes"][0].get("underlying_spot_price")
+            if spot_start is not None and spot_end is not None:
+                realized_trend = spot_end - spot_start
+                if style and "Trending" in style and abs(realized_trend) > PRICE_MOVE_THRESHOLD:
+                    outcome = 1
+                elif style and "Sideways" in style and abs(realized_trend) < PRICE_MOVE_THRESHOLD:
+                    outcome = 1
+                elif style and "Volatile" in style:
+                    # Volatile: large swings in either direction
+                    outcome = int(abs(realized_trend) > PRICE_MOVE_THRESHOLD * 2)
+                else:
+                    outcome = 0
+                db["market_style_snapshots"].update_one({"_id": doc["_id"]}, {"$set": {"outcome": outcome}})
+                print(f"[MarketStyle] Labeled {ts} as {'WIN' if outcome else 'LOSS'}")
+
+def label_trap_detector_outcomes():
+    docs = list(db["trap_detector_snapshots"].find({"outcome": {"$exists": False}}))
+    for doc in docs:
+        ts = doc["timestamp"]
+        user = doc["user"]
+        expiry = doc["expiry"]
+        call = doc.get("call", {})
+        put = doc.get("put", {})
+        future = db["option_chain_snapshots"].find_one({
+            "user": user,
+            "expiry": expiry,
+            "timestamp": {"$gte": ts + timedelta(minutes=LOOKAHEAD_MINUTES)}
+        }, sort=[("timestamp", 1)])
+        spot_now = None
+        spot_future = None
+        if future and future.get("strikes"):
+            spot_future = future["strikes"][0].get("underlying_spot_price")
+        # Trap win: trap detected and price reverses, or no trap and price continues
+        outcome = 0
+        if call.get("trap_detected"):
+            # If trap detected, price should reverse direction
+            # (for simplicity, just check price moved opposite to prior trend)
+            # Not perfect, but a start
+            outcome = int(spot_future is not None and abs(spot_future) < PRICE_MOVE_THRESHOLD)
+        elif not call.get("trap_detected"):
+            # No trap: price should continue in same direction
+            outcome = int(spot_future is not None and abs(spot_future) > PRICE_MOVE_THRESHOLD)
+        db["trap_detector_snapshots"].update_one({"_id": doc["_id"]}, {"$set": {"outcome": outcome}})
+        print(f"[TrapDetector] Labeled {ts} as {'WIN' if outcome else 'LOSS'}")
+
+def label_reversal_probability_outcomes():
+    docs = list(db["reversal_probability_snapshots"].find({"outcome": {"$exists": False}}))
+    for doc in docs:
+        ts = doc["timestamp"]
+        user = doc["user"]
+        expiry = doc["expiry"]
+        reversal_type = doc.get("reversal_type")
+        future = db["option_chain_snapshots"].find_one({
+            "user": user,
+            "expiry": expiry,
+            "timestamp": {"$gte": ts + timedelta(minutes=LOOKAHEAD_MINUTES)}
+        }, sort=[("timestamp", 1)])
+        spot_now = None
+        spot_future = None
+        if future and future.get("strikes"):
+            spot_future = future["strikes"][0].get("underlying_spot_price")
+        # Win if reversal predicted and price reverses
+        outcome = 0
+        if reversal_type == "bullish" and spot_future is not None and spot_future > PRICE_MOVE_THRESHOLD:
+            outcome = 1
+        elif reversal_type == "bearish" and spot_future is not None and spot_future < -PRICE_MOVE_THRESHOLD:
+            outcome = 1
+        db["reversal_probability_snapshots"].update_one({"_id": doc["_id"]}, {"$set": {"outcome": outcome}})
+        print(f"[Reversal] Labeled {ts} as {'WIN' if outcome else 'LOSS'}")
+
+def label_sr_guard_outcomes():
+    docs = list(db["support_resistance_snapshots"].find({"outcome": {"$exists": False}}))
+    for doc in docs:
+        ts = doc["timestamp"]
+        user = doc["user"]
+        expiry = doc["expiry"]
+        zones = doc.get("zones", [])
+        future = db["option_chain_snapshots"].find_one({
+            "user": user,
+            "expiry": expiry,
+            "timestamp": {"$gte": ts + timedelta(minutes=LOOKAHEAD_MINUTES)}
+        }, sort=[("timestamp", 1)])
+        spot_now = None
+        spot_future = None
+        if future and future.get("strikes"):
+            spot_future = future["strikes"][0].get("underlying_spot_price")
+        # Win if zone prediction matches price behavior at level
+        outcome = 0
+        for z in zones:
+            if z.get("bias_suggestion") == "Bounce" and spot_future is not None and spot_future < PRICE_MOVE_THRESHOLD:
+                outcome = 1
+            elif z.get("bias_suggestion") == "Break" and spot_future is not None and spot_future > PRICE_MOVE_THRESHOLD:
+                outcome = 1
+        db["support_resistance_snapshots"].update_one({"_id": doc["_id"]}, {"$set": {"outcome": outcome}})
+        print(f"[SRGuard] Labeled {ts} as {'WIN' if outcome else 'LOSS'}")
+
+# --- Background Task ---
+def outcome_labeler_loop():
+    while True:
+        label_entry_logic_outcomes()
+        label_bias_outcomes()
+        label_market_style_outcomes()
+        label_trap_detector_outcomes()
+        label_reversal_probability_outcomes()
+        label_sr_guard_outcomes()
+        time.sleep(LABELER_SLEEP)
+
+@app.post("/start-outcome-labeler")
+def start_outcome_labeler(background_tasks: BackgroundTasks):
+    threading.Thread(target=outcome_labeler_loop, daemon=True).start()
+    return {"status": "Outcome labeler started in background."}
+
+def auto_adaptive_trade_sizer(entry_confidence, anomaly_score, market_style):
+    """
+    Returns recommended_position_size based on confidence, anomaly, and market style.
+    """
+    if entry_confidence > 0.85 and anomaly_score < 0.3:
+        return 2.0
+    elif entry_confidence < 0.6 or anomaly_score > 0.7:
+        return 0.5
+    else:
+        return 1.0

@@ -7,3 +7,4 @@ pydantic
 pytz
 numpy
 python-dateutil
+joblib
